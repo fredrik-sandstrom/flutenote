@@ -689,7 +689,6 @@ function playSong() {
 
 function stopSong() {
     songPlaying = false;
-    songNotes = [];
     songStartTime = null;
 
     playSongBtn.style.display = 'inline-block';
@@ -764,6 +763,13 @@ stopSongBtn.addEventListener('click', stopSong);
 loadExampleBtn.addEventListener('click', loadExampleSong);
 transposeUpBtn.addEventListener('click', transposeUp);
 transposeDownBtn.addEventListener('click', transposeDown);
+
+// Clear song data when user edits the text (so it reloads on next play)
+songInput.addEventListener('input', () => {
+    if (!songInput.disabled) {  // Only clear if not currently playing
+        songNotes = [];
+    }
+});
 
 // Handle window resize
 window.addEventListener('resize', resizeCanvas);
