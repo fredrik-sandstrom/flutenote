@@ -12,9 +12,12 @@ const centsDisplay = document.getElementById('centsDisplay');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 
-// DOM elements - Transcript
+// DOM elements - Transcript (Piano Roll)
 const transcriptDisplay = document.getElementById('transcriptDisplay');
 const clearTranscriptBtn = document.getElementById('clearTranscript');
+const pianoRollCanvas = document.getElementById('pianoRollCanvas');
+const noteLabels = document.getElementById('noteLabels');
+const scrollContainer = document.getElementById('scrollContainer');
 
 // DOM elements - Metronome
 const startMetronomeBtn = document.getElementById('startMetronome');
@@ -24,10 +27,23 @@ const tempoDisplay = document.getElementById('tempoDisplay');
 const beatsPerMeasure = document.getElementById('beatsPerMeasure');
 const beatIndicator = document.getElementById('beatIndicator');
 
-// Transcript tracking
+// Piano Roll tracking
 let currentNote = null;
 let noteStartTime = null;
-const MAX_TRANSCRIPT_ENTRIES = 50;
+const noteBars = []; // Array of {note, startTime, endTime, cents, yPosition}
+const PIXELS_PER_SECOND = 100; // Scroll speed
+const NOTE_HEIGHT = 20; // Height of each note lane
+
+// Flute range: C4 (MIDI 60) to C7 (MIDI 96)
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const MIN_MIDI = 60; // C4
+const MAX_MIDI = 96; // C7
+const TOTAL_NOTES = MAX_MIDI - MIN_MIDI + 1;
+
+// Canvas context
+let ctx = null;
+let animationFrameId = null;
+let startTime = null;
 
 // Tuner event handlers
 startTunerBtn.addEventListener('click', async () => {
@@ -154,9 +170,137 @@ function updateBeatIndicator(activeBeat = -1) {
 // Initialize beat indicator
 updateBeatIndicator();
 
-// Transcript functions
+// Piano Roll Initialization
+function initPianoRoll() {
+    // Setup canvas
+    ctx = pianoRollCanvas.getContext('2d');
+    resizeCanvas();
+
+    // Create note labels
+    for (let midi = MAX_MIDI; midi >= MIN_MIDI; midi--) {
+        const noteIndex = midi % 12;
+        const noteName = NOTE_NAMES[noteIndex];
+        const octave = Math.floor(midi / 12) - 1;
+        const fullName = noteName + octave;
+
+        const label = document.createElement('div');
+        label.className = 'note-label';
+        if (noteName.includes('#')) {
+            label.classList.add('black-key');
+        }
+        label.textContent = fullName;
+        noteLabels.appendChild(label);
+    }
+
+    // Start animation
+    startTime = performance.now();
+    animate();
+}
+
+function resizeCanvas() {
+    const rect = scrollContainer.getBoundingClientRect();
+    pianoRollCanvas.width = rect.width;
+    pianoRollCanvas.height = TOTAL_NOTES * NOTE_HEIGHT;
+}
+
+// Helper: Convert note name to MIDI number
+function noteNameToMidi(noteName) {
+    // Parse note name like "C4", "C#4", "D5"
+    const match = noteName.match(/^([A-G]#?)(\d+)$/);
+    if (!match) return null;
+
+    const [, note, octave] = match;
+    const noteIndex = NOTE_NAMES.indexOf(note);
+    if (noteIndex === -1) return null;
+
+    return (parseInt(octave) + 1) * 12 + noteIndex;
+}
+
+// Helper: Get Y position for MIDI note
+function getYPosition(midi) {
+    return (MAX_MIDI - midi) * NOTE_HEIGHT;
+}
+
+// Helper: Get color based on accuracy
+function getAccuracyColor(cents) {
+    if (Math.abs(cents) <= 10) {
+        return '#4CAF50'; // Green - perfect
+    } else if (Math.abs(cents) <= 25) {
+        return '#FFC107'; // Yellow - close
+    } else {
+        return '#f44336'; // Red - off
+    }
+}
+
+// Animation loop
+function animate() {
+    const currentTime = performance.now();
+    const elapsedSeconds = (currentTime - startTime) / 1000;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, pianoRollCanvas.width, pianoRollCanvas.height);
+
+    // Draw horizontal lines for each note
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= TOTAL_NOTES; i++) {
+        const y = i * NOTE_HEIGHT;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(pianoRollCanvas.width, y);
+        ctx.stroke();
+    }
+
+    // Draw vertical "now" line (where notes should be when played)
+    const nowX = pianoRollCanvas.width * 0.2; // 20% from left
+    ctx.strokeStyle = '#667eea';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(nowX, 0);
+    ctx.lineTo(nowX, pianoRollCanvas.height);
+    ctx.stroke();
+
+    // Draw note bars
+    for (let i = noteBars.length - 1; i >= 0; i--) {
+        const bar = noteBars[i];
+        const barStartX = nowX + (bar.startTime - elapsedSeconds) * PIXELS_PER_SECOND;
+        const barEndX = nowX + (bar.endTime - elapsedSeconds) * PIXELS_PER_SECOND;
+        const barWidth = barEndX - barStartX;
+
+        // Remove bars that have scrolled off screen
+        if (barEndX < 0) {
+            noteBars.splice(i, 1);
+            continue;
+        }
+
+        // Only draw bars that are visible
+        if (barStartX < pianoRollCanvas.width) {
+            ctx.fillStyle = bar.color;
+            ctx.fillRect(
+                Math.max(0, barStartX),
+                bar.yPosition,
+                Math.min(barWidth, pianoRollCanvas.width - barStartX),
+                NOTE_HEIGHT - 2
+            );
+
+            // Draw border
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(
+                Math.max(0, barStartX),
+                bar.yPosition,
+                Math.min(barWidth, pianoRollCanvas.width - barStartX),
+                NOTE_HEIGHT - 2
+            );
+        }
+    }
+
+    animationFrameId = requestAnimationFrame(animate);
+}
+
+// Note tracking functions
 function trackNote(note) {
-    const now = Date.now();
+    const currentTime = (performance.now() - startTime) / 1000;
 
     // If this is a different note than the current one, finalize the previous note
     if (currentNote && currentNote.fullName !== note.fullName) {
@@ -168,9 +312,9 @@ function trackNote(note) {
         currentNote = {
             fullName: note.fullName,
             cents: note.cents,
-            frequency: note.frequency
+            midi: noteNameToMidi(note.fullName)
         };
-        noteStartTime = now;
+        noteStartTime = currentTime;
     } else {
         // Update cents value (average it for stability)
         currentNote.cents = Math.round((currentNote.cents + note.cents) / 2);
@@ -178,76 +322,44 @@ function trackNote(note) {
 }
 
 function finalizeCurrentNote() {
-    if (!currentNote || !noteStartTime) return;
+    if (!currentNote || noteStartTime === null) return;
 
-    const duration = (Date.now() - noteStartTime) / 1000; // Duration in seconds
+    const currentTime = (performance.now() - startTime) / 1000;
+    const duration = currentTime - noteStartTime;
 
-    // Only add notes that lasted at least 0.2 seconds (reduce noise)
-    if (duration >= 0.2) {
-        addToTranscript(currentNote.fullName, currentNote.cents, duration);
+    // Only add notes that lasted at least 0.15 seconds (reduce noise)
+    if (duration >= 0.15 && currentNote.midi) {
+        const midi = currentNote.midi;
+
+        // Only show notes in flute range
+        if (midi >= MIN_MIDI && midi <= MAX_MIDI) {
+            noteBars.push({
+                note: currentNote.fullName,
+                startTime: noteStartTime,
+                endTime: currentTime,
+                cents: currentNote.cents,
+                yPosition: getYPosition(midi),
+                color: getAccuracyColor(currentNote.cents)
+            });
+        }
     }
 
     currentNote = null;
     noteStartTime = null;
-}
-
-function addToTranscript(noteName, cents, duration) {
-    // Remove empty message if it exists
-    const emptyMessage = transcriptDisplay.querySelector('.transcript-empty');
-    if (emptyMessage) {
-        emptyMessage.remove();
-    }
-
-    // Determine accuracy class
-    let accuracyClass, accuracyText;
-    if (Math.abs(cents) <= 10) {
-        accuracyClass = 'perfect';
-        accuracyText = 'Perfect';
-    } else if (Math.abs(cents) <= 25) {
-        accuracyClass = 'close';
-        accuracyText = 'Close';
-    } else {
-        accuracyClass = 'off';
-        accuracyText = 'Off';
-    }
-
-    // Create entry
-    const entry = document.createElement('div');
-    entry.className = 'transcript-entry';
-
-    // Calculate bar width (max 5 seconds = 100%)
-    const barWidth = Math.min((duration / 5) * 100, 100);
-
-    entry.innerHTML = `
-        <div class="transcript-note">${noteName}</div>
-        <div class="transcript-duration-container">
-            <div class="transcript-duration-bar ${accuracyClass}" style="width: ${barWidth}%"></div>
-        </div>
-        <div class="transcript-info">
-            <div class="transcript-cents">${cents > 0 ? '+' : ''}${cents} cents (${accuracyText})</div>
-            <div class="transcript-duration">${duration.toFixed(1)}s</div>
-        </div>
-    `;
-
-    // Insert at the top
-    transcriptDisplay.insertBefore(entry, transcriptDisplay.firstChild);
-
-    // Limit number of entries
-    const entries = transcriptDisplay.querySelectorAll('.transcript-entry');
-    if (entries.length > MAX_TRANSCRIPT_ENTRIES) {
-        entries[entries.length - 1].remove();
-    }
 }
 
 function clearTranscript() {
-    transcriptDisplay.innerHTML = `
-        <div class="transcript-empty">
-            Start playing to see your note history here
-        </div>
-    `;
+    noteBars.length = 0;
     currentNote = null;
     noteStartTime = null;
+    startTime = performance.now();
 }
 
-// Transcript event handlers
+// Event handlers
 clearTranscriptBtn.addEventListener('click', clearTranscript);
+
+// Handle window resize
+window.addEventListener('resize', resizeCanvas);
+
+// Initialize piano roll when page loads
+initPianoRoll();
