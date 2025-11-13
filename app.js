@@ -12,6 +12,10 @@ const centsDisplay = document.getElementById('centsDisplay');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 
+// DOM elements - Transcript
+const transcriptDisplay = document.getElementById('transcriptDisplay');
+const clearTranscriptBtn = document.getElementById('clearTranscript');
+
 // DOM elements - Metronome
 const startMetronomeBtn = document.getElementById('startMetronome');
 const stopMetronomeBtn = document.getElementById('stopMetronome');
@@ -19,6 +23,11 @@ const tempoSlider = document.getElementById('tempoSlider');
 const tempoDisplay = document.getElementById('tempoDisplay');
 const beatsPerMeasure = document.getElementById('beatsPerMeasure');
 const beatIndicator = document.getElementById('beatIndicator');
+
+// Transcript tracking
+let currentNote = null;
+let noteStartTime = null;
+const MAX_TRANSCRIPT_ENTRIES = 50;
 
 // Tuner event handlers
 startTunerBtn.addEventListener('click', async () => {
@@ -41,6 +50,9 @@ stopTunerBtn.addEventListener('click', () => {
     frequency.textContent = '0 Hz';
     centsDisplay.textContent = '0 cents';
     meterNeedle.style.left = '50%';
+
+    // Finalize any current note when stopping
+    finalizeCurrentNote();
 });
 
 // Override tuner's onPitchDetected method
@@ -63,12 +75,18 @@ tuner.onPitchDetected = (freq, note) => {
         } else {
             meterNeedle.style.backgroundColor = '#f44336'; // Red - out of tune
         }
+
+        // Track note for transcript
+        trackNote(note);
     } else {
         noteText.textContent = '--';
         frequency.textContent = '0 Hz';
         centsDisplay.textContent = '0 cents';
         meterNeedle.style.left = '50%';
         meterNeedle.style.backgroundColor = '#666';
+
+        // Note stopped, finalize current note
+        finalizeCurrentNote();
     }
 };
 
@@ -135,3 +153,101 @@ function updateBeatIndicator(activeBeat = -1) {
 
 // Initialize beat indicator
 updateBeatIndicator();
+
+// Transcript functions
+function trackNote(note) {
+    const now = Date.now();
+
+    // If this is a different note than the current one, finalize the previous note
+    if (currentNote && currentNote.fullName !== note.fullName) {
+        finalizeCurrentNote();
+    }
+
+    // Start tracking this note if it's new
+    if (!currentNote || currentNote.fullName !== note.fullName) {
+        currentNote = {
+            fullName: note.fullName,
+            cents: note.cents,
+            frequency: note.frequency
+        };
+        noteStartTime = now;
+    } else {
+        // Update cents value (average it for stability)
+        currentNote.cents = Math.round((currentNote.cents + note.cents) / 2);
+    }
+}
+
+function finalizeCurrentNote() {
+    if (!currentNote || !noteStartTime) return;
+
+    const duration = (Date.now() - noteStartTime) / 1000; // Duration in seconds
+
+    // Only add notes that lasted at least 0.2 seconds (reduce noise)
+    if (duration >= 0.2) {
+        addToTranscript(currentNote.fullName, currentNote.cents, duration);
+    }
+
+    currentNote = null;
+    noteStartTime = null;
+}
+
+function addToTranscript(noteName, cents, duration) {
+    // Remove empty message if it exists
+    const emptyMessage = transcriptDisplay.querySelector('.transcript-empty');
+    if (emptyMessage) {
+        emptyMessage.remove();
+    }
+
+    // Determine accuracy class
+    let accuracyClass, accuracyText;
+    if (Math.abs(cents) <= 10) {
+        accuracyClass = 'perfect';
+        accuracyText = 'Perfect';
+    } else if (Math.abs(cents) <= 25) {
+        accuracyClass = 'close';
+        accuracyText = 'Close';
+    } else {
+        accuracyClass = 'off';
+        accuracyText = 'Off';
+    }
+
+    // Create entry
+    const entry = document.createElement('div');
+    entry.className = 'transcript-entry';
+
+    // Calculate bar width (max 5 seconds = 100%)
+    const barWidth = Math.min((duration / 5) * 100, 100);
+
+    entry.innerHTML = `
+        <div class="transcript-note">${noteName}</div>
+        <div class="transcript-duration-container">
+            <div class="transcript-duration-bar ${accuracyClass}" style="width: ${barWidth}%"></div>
+        </div>
+        <div class="transcript-info">
+            <div class="transcript-cents">${cents > 0 ? '+' : ''}${cents} cents (${accuracyText})</div>
+            <div class="transcript-duration">${duration.toFixed(1)}s</div>
+        </div>
+    `;
+
+    // Insert at the top
+    transcriptDisplay.insertBefore(entry, transcriptDisplay.firstChild);
+
+    // Limit number of entries
+    const entries = transcriptDisplay.querySelectorAll('.transcript-entry');
+    if (entries.length > MAX_TRANSCRIPT_ENTRIES) {
+        entries[entries.length - 1].remove();
+    }
+}
+
+function clearTranscript() {
+    transcriptDisplay.innerHTML = `
+        <div class="transcript-empty">
+            Start playing to see your note history here
+        </div>
+    `;
+    currentNote = null;
+    noteStartTime = null;
+}
+
+// Transcript event handlers
+clearTranscriptBtn.addEventListener('click', clearTranscript);
