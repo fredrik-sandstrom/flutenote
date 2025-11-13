@@ -252,9 +252,9 @@ function animate() {
     }
 
     // Draw vertical "now" line (where notes should be when played)
-    const nowX = pianoRollCanvas.width * 0.2; // 20% from left
+    const nowX = pianoRollCanvas.width * 0.85; // 85% from left (right side)
     ctx.strokeStyle = '#667eea';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(nowX, 0);
     ctx.lineTo(nowX, pianoRollCanvas.height);
