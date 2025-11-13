@@ -24,6 +24,8 @@ const songInput = document.getElementById('songInput');
 const playSongBtn = document.getElementById('playSong');
 const stopSongBtn = document.getElementById('stopSong');
 const loadExampleBtn = document.getElementById('loadExample');
+const transposeUpBtn = document.getElementById('transposeUp');
+const transposeDownBtn = document.getElementById('transposeDown');
 
 // DOM elements - Metronome
 const startMetronomeBtn = document.getElementById('startMetronome');
@@ -694,10 +696,60 @@ G G F F | E E D2 | G G F F | E E D2 |
 C C G G | A A G2 | F F E E | D D C2 |`;
 }
 
+function transposeSong(semitones) {
+    if (songNotes.length === 0) {
+        alert('Please load a song first!');
+        return;
+    }
+
+    // Stop song if playing
+    if (songPlaying) {
+        stopSong();
+    }
+
+    // Transpose all notes
+    let transposedCount = 0;
+    let outOfRangeCount = 0;
+
+    songNotes = songNotes.map(note => {
+        const newMidi = note.midi + semitones;
+
+        // Check if new MIDI is within flute range
+        if (newMidi >= MIN_MIDI && newMidi <= MAX_MIDI) {
+            transposedCount++;
+            return {
+                ...note,
+                midi: newMidi,
+                note: midiToNoteName(newMidi),
+                yPosition: getYPosition(newMidi)
+            };
+        } else {
+            outOfRangeCount++;
+            return note; // Keep original note if out of range
+        }
+    });
+
+    if (outOfRangeCount > 0) {
+        alert(`Transposed ${transposedCount} notes. ${outOfRangeCount} notes were out of flute range (C4-C7) and kept at original pitch.`);
+    } else {
+        alert(`Successfully transposed ${transposedCount} notes by ${semitones > 0 ? '+' : ''}${semitones} semitones.`);
+    }
+}
+
+function transposeUp() {
+    transposeSong(12); // +1 octave
+}
+
+function transposeDown() {
+    transposeSong(-12); // -1 octave
+}
+
 // Song event handlers
 playSongBtn.addEventListener('click', playSong);
 stopSongBtn.addEventListener('click', stopSong);
 loadExampleBtn.addEventListener('click', loadExampleSong);
+transposeUpBtn.addEventListener('click', transposeUp);
+transposeDownBtn.addEventListener('click', transposeDown);
 
 // Handle window resize
 window.addEventListener('resize', resizeCanvas);
