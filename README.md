@@ -65,13 +65,33 @@ Note: GitHub Pages automatically serves over HTTPS, which is required for microp
 - Microphone access for tuner functionality
 - HTTPS or localhost (required for microphone access)
 
+## Testing the Tuner
+
+A comprehensive test suite is included to verify the pitch detection accuracy:
+
+1. Open `test.html` in your browser
+2. Click "Run All Tests" to test all notes from C4 to C7 (full flute range)
+3. Or click "Quick Test" to test one octave (C4 to C5)
+
+The test suite generates synthetic tones for each note and validates:
+- Correct note detection
+- Frequency accuracy
+- Cents deviation (±10 cents = perfect, ±25 cents = close)
+
+Results are color-coded:
+- 🟢 Green: Perfect match (±10 cents)
+- 🟡 Yellow: Close match (±25 cents)
+- 🔴 Red: Failed or wrong note detected
+
 ## Files
 
 - `index.html` - Main HTML structure
+- `test.html` - Automated test suite for pitch detection accuracy
 - `styles.css` - Styling and layout
 - `tuner.js` - Pitch detection and tuner logic
 - `metronome.js` - Metronome timing and sound generation
 - `app.js` - Application logic and UI event handlers
+- `test-runner.js` - Test suite implementation
 
 ## License
 
