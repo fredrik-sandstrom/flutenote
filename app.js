@@ -634,11 +634,11 @@ function parseSongNotation(notation) {
     return parsed;
 }
 
-function playSong() {
+function loadSongFromText() {
     const notation = songInput.value.trim();
     if (!notation) {
         alert('Please enter song notation first!');
-        return;
+        return false;
     }
 
     // Try to parse as ABC notation first (check for ABC headers or just ABC-style notes)
@@ -659,7 +659,18 @@ function playSong() {
 
     if (songNotes.length === 0) {
         alert('No valid notes found. Please check the ABC notation format.');
-        return;
+        return false;
+    }
+
+    return true;
+}
+
+function playSong() {
+    // Load song if not already loaded or if text has changed
+    if (songNotes.length === 0) {
+        if (!loadSongFromText()) {
+            return;
+        }
     }
 
     songPlaying = true;
@@ -694,6 +705,9 @@ K:C
 C C G G | A A G2 | F F E E | D D C2 |
 G G F F | E E D2 | G G F F | E E D2 |
 C C G G | A A G2 | F F E E | D D C2 |`;
+
+    // Load and parse the song, setting tempo
+    loadSongFromText();
 }
 
 function transposeSong(semitones) {
