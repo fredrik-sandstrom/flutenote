@@ -187,8 +187,8 @@ function initPianoRoll() {
     ctx = pianoRollCanvas.getContext('2d');
     resizeCanvas();
 
-    // Create note labels
-    for (let midi = MAX_MIDI; midi >= MIN_MIDI; midi--) {
+    // Create note labels (from bottom to top to match canvas)
+    for (let midi = MIN_MIDI; midi <= MAX_MIDI; midi++) {
         const noteIndex = midi % 12;
         const noteName = NOTE_NAMES[noteIndex];
         const octave = Math.floor(midi / 12) - 1;
@@ -263,7 +263,7 @@ function animate() {
     }
 
     // Draw vertical "now" line (where notes should be when played)
-    const nowX = pianoRollCanvas.width * 0.85; // 85% from left (right side)
+    const nowX = pianoRollCanvas.width * 0.5; // 50% from left (middle)
     ctx.strokeStyle = '#667eea';
     ctx.lineWidth = 3;
     ctx.beginPath();
