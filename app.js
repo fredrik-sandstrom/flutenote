@@ -327,8 +327,8 @@ function finalizeCurrentNote() {
     const currentTime = (performance.now() - startTime) / 1000;
     const duration = currentTime - noteStartTime;
 
-    // Only add notes that lasted at least 0.15 seconds (reduce noise)
-    if (duration >= 0.15 && currentNote.midi) {
+    // Add all notes with valid MIDI number
+    if (currentNote.midi) {
         const midi = currentNote.midi;
 
         // Only show notes in flute range
