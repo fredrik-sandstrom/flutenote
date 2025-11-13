@@ -60,18 +60,24 @@ class Metronome {
         // Create oscillator for the click sound
         const osc = this.audioContext.createOscillator();
         const envelope = this.audioContext.createGain();
+        const masterGain = this.audioContext.createGain();
 
-        // First beat is accented (higher pitch)
-        osc.frequency.value = beatNumber === 0 ? 1000 : 800;
+        // First beat is accented (higher pitch and louder)
+        osc.frequency.value = beatNumber === 0 ? 1200 : 800;
 
+        // Louder volume - start at max and decay more slowly
         envelope.gain.value = 1;
-        envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+        envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+
+        // Master gain boost for overall louder output
+        masterGain.gain.value = 0.8;
 
         osc.connect(envelope);
-        envelope.connect(this.audioContext.destination);
+        envelope.connect(masterGain);
+        masterGain.connect(this.audioContext.destination);
 
         osc.start(time);
-        osc.stop(time + 0.05);
+        osc.stop(time + 0.1);
 
         // Trigger visual update
         this.onBeat(beatNumber, time);
