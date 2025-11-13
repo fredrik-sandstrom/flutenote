@@ -57,6 +57,22 @@
             <div class="transcript-controls">
                 <button id="clearTranscript" class="btn btn-secondary" style="padding: 8px 20px; font-size: 14px;">Clear History</button>
             </div>
+
+            <div class="song-controls" style="margin-bottom: 15px; padding: 15px; background: white; border-radius: 8px;">
+                <label for="songInput" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
+                    Song Notation:
+                    <span style="font-weight: normal; color: #666; font-size: 0.85em;">
+                        (Format: C4:1.0 D4:0.5 E4:0.5 - note:duration in seconds)
+                    </span>
+                </label>
+                <textarea id="songInput" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-family: monospace; font-size: 0.9em; resize: vertical;" placeholder="Example: C4:1.0 D4:0.5 E4:0.5 F4:1.0 G4:2.0"></textarea>
+                <div style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button id="playSong" class="btn btn-primary" style="padding: 8px 20px; font-size: 14px;">Play Song</button>
+                    <button id="stopSong" class="btn btn-secondary" style="padding: 8px 20px; font-size: 14px; display: none;">Stop Song</button>
+                    <button id="loadExample" class="btn" style="padding: 8px 20px; font-size: 14px; background: #6c757d; color: white;">Load Example Song</button>
+                </div>
+            </div>
+
             <div id="transcriptDisplay" class="transcript-display">
                 <div class="piano-roll-container">
                     <div class="note-labels" id="noteLabels"></div>
@@ -100,7 +116,7 @@
         </div>
 
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 0.85em;">
-            Version 1.4.0
+            Version 1.5.0
         </div>
     </div>
 

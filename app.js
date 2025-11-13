@@ -19,6 +19,12 @@ const pianoRollCanvas = document.getElementById('pianoRollCanvas');
 const noteLabels = document.getElementById('noteLabels');
 const scrollContainer = document.getElementById('scrollContainer');
 
+// DOM elements - Song playback
+const songInput = document.getElementById('songInput');
+const playSongBtn = document.getElementById('playSong');
+const stopSongBtn = document.getElementById('stopSong');
+const loadExampleBtn = document.getElementById('loadExample');
+
 // DOM elements - Metronome
 const startMetronomeBtn = document.getElementById('startMetronome');
 const stopMetronomeBtn = document.getElementById('stopMetronome');
@@ -30,7 +36,7 @@ const beatIndicator = document.getElementById('beatIndicator');
 // Piano Roll tracking
 let currentNote = null;
 let noteStartTime = null;
-const noteBars = []; // Array of {note, startTime, endTime, cents, yPosition}
+const noteBars = []; // Array of {note, startTime, endTime, cents, yPosition, color}
 const PIXELS_PER_SECOND = 100; // Scroll speed
 const NOTE_HEIGHT = 20; // Height of each note lane
 
@@ -44,6 +50,11 @@ const TOTAL_NOTES = MAX_MIDI - MIN_MIDI + 1;
 let ctx = null;
 let animationFrameId = null;
 let startTime = null;
+
+// Song playback
+let songNotes = []; // Array of {note, startTime, endTime, yPosition, midi}
+let songPlaying = false;
+let songStartTime = null;
 
 // Tuner event handlers
 startTunerBtn.addEventListener('click', async () => {
@@ -260,7 +271,61 @@ function animate() {
     ctx.lineTo(nowX, pianoRollCanvas.height);
     ctx.stroke();
 
-    // Draw completed note bars
+    // Draw song notes (beneath player notes)
+    if (songPlaying && songNotes.length > 0) {
+        const songElapsed = elapsedSeconds - songStartTime;
+
+        for (const songNote of songNotes) {
+            const barStartX = nowX + (songNote.startTime - songElapsed) * PIXELS_PER_SECOND;
+            const barEndX = nowX + (songNote.endTime - songElapsed) * PIXELS_PER_SECOND;
+            const barWidth = barEndX - barStartX;
+
+            // Only draw notes that are visible
+            if (barEndX > 0 && barStartX < pianoRollCanvas.width) {
+                // Determine if note has passed the blue line (mute color)
+                const hasPassed = barEndX < nowX;
+
+                // Draw song note as outlined bar (below player note position)
+                const yOffset = 10; // Offset down from the note lane
+                const noteHeight = NOTE_HEIGHT - 4;
+
+                if (hasPassed) {
+                    // Muted color for passed notes
+                    ctx.fillStyle = 'rgba(150, 150, 150, 0.3)';
+                    ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+                } else {
+                    // Active color for upcoming notes
+                    ctx.fillStyle = 'rgba(102, 126, 234, 0.3)';
+                    ctx.strokeStyle = 'rgba(102, 126, 234, 0.8)';
+                }
+
+                ctx.lineWidth = 2;
+
+                // Draw filled bar
+                ctx.fillRect(
+                    Math.max(0, barStartX),
+                    songNote.yPosition + yOffset,
+                    Math.min(barWidth, pianoRollCanvas.width - barStartX),
+                    noteHeight
+                );
+
+                // Draw outline
+                ctx.strokeRect(
+                    Math.max(0, barStartX),
+                    songNote.yPosition + yOffset,
+                    Math.min(barWidth, pianoRollCanvas.width - barStartX),
+                    noteHeight
+                );
+            }
+        }
+
+        // Auto-stop when song is finished
+        if (songElapsed > songNotes[songNotes.length - 1].endTime + 2) {
+            stopSong();
+        }
+    }
+
+    // Draw completed note bars (player notes on top)
     for (let i = noteBars.length - 1; i >= 0; i--) {
         const bar = noteBars[i];
         const barStartX = nowX + (bar.startTime - elapsedSeconds) * PIXELS_PER_SECOND;
@@ -393,6 +458,80 @@ function clearTranscript() {
 
 // Event handlers
 clearTranscriptBtn.addEventListener('click', clearTranscript);
+
+// Song playback functions
+function parseSongNotation(notation) {
+    const parsed = [];
+    let currentTime = 0;
+
+    // Split by whitespace and parse each note:duration pair
+    const tokens = notation.trim().split(/\s+/);
+
+    for (const token of tokens) {
+        const parts = token.split(':');
+        if (parts.length !== 2) continue;
+
+        const noteName = parts[0].trim();
+        const duration = parseFloat(parts[1]);
+
+        if (isNaN(duration) || duration <= 0) continue;
+
+        const midi = noteNameToMidi(noteName);
+        if (!midi || midi < MIN_MIDI || midi > MAX_MIDI) continue;
+
+        parsed.push({
+            note: noteName,
+            startTime: currentTime,
+            endTime: currentTime + duration,
+            yPosition: getYPosition(midi),
+            midi: midi
+        });
+
+        currentTime += duration;
+    }
+
+    return parsed;
+}
+
+function playSong() {
+    const notation = songInput.value.trim();
+    if (!notation) {
+        alert('Please enter song notation first!');
+        return;
+    }
+
+    songNotes = parseSongNotation(notation);
+    if (songNotes.length === 0) {
+        alert('No valid notes found. Format: C4:1.0 D4:0.5 E4:0.5');
+        return;
+    }
+
+    songPlaying = true;
+    songStartTime = (performance.now() - startTime) / 1000;
+
+    playSongBtn.style.display = 'none';
+    stopSongBtn.style.display = 'inline-block';
+    songInput.disabled = true;
+}
+
+function stopSong() {
+    songPlaying = false;
+    songNotes = [];
+    songStartTime = null;
+
+    playSongBtn.style.display = 'inline-block';
+    stopSongBtn.style.display = 'none';
+    songInput.disabled = false;
+}
+
+function loadExampleSong() {
+    songInput.value = 'C4:0.5 D4:0.5 E4:0.5 F4:0.5 G4:1.0 G4:1.0 A4:0.5 A4:0.5 A4:0.5 A4:0.5 G4:2.0 F4:0.5 F4:0.5 F4:0.5 F4:0.5 E4:1.0 E4:1.0 D4:0.5 D4:0.5 D4:0.5 D4:0.5 C4:2.0';
+}
+
+// Song event handlers
+playSongBtn.addEventListener('click', playSong);
+stopSongBtn.addEventListener('click', stopSong);
+loadExampleBtn.addEventListener('click', loadExampleSong);
 
 // Handle window resize
 window.addEventListener('resize', resizeCanvas);
