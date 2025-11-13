@@ -19,9 +19,23 @@ A browser-based flute tuner and metronome application that helps musicians pract
 - Visual beat indicators with accent on the first beat
 - Audio click with distinct sound for downbeat
 
+## Deployment on GitHub Pages
+
+This app is ready to deploy on GitHub Pages:
+
+1. Push your code to a GitHub repository
+2. Go to your repository settings on GitHub
+3. Navigate to "Pages" in the left sidebar
+4. Under "Source", select the branch you want to deploy (e.g., `main` or `claude/flute-tuner-metronome-app-011CV6HvMcmcDxXTCcbmNAbo`)
+5. Click "Save"
+6. Your site will be published at `https://<username>.github.io/<repository-name>/`
+
+Note: GitHub Pages automatically serves over HTTPS, which is required for microphone access.
+
 ## How to Use
 
 1. Open `index.html` in a modern web browser (Chrome, Firefox, Safari, or Edge)
+   - Or visit your GitHub Pages URL if deployed
 2. Grant microphone permissions when prompted
 
 ### Using the Tuner
