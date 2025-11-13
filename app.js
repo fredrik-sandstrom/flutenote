@@ -56,7 +56,8 @@ let startTime = null;
 // Song playback
 let songNotes = []; // Array of {note, startTime, endTime, yPosition, midi}
 let songPlaying = false;
-let songStartTime = null;
+let songPlaybackPosition = 0; // Current position in song (in song-time seconds)
+let lastFrameTime = null;
 let songOriginalTempo = 120; // Store original song tempo for speed control
 
 // Tuner event handlers
@@ -276,13 +277,18 @@ function animate() {
 
     // Draw song notes (beneath player notes)
     if (songPlaying && songNotes.length > 0) {
-        // Apply tempo scaling based on current metronome tempo
+        // Update playback position incrementally based on current tempo
+        const now = currentTime; // Use the same currentTime from the start of animate()
+        const deltaTime = (now - lastFrameTime) / 1000; // Convert to seconds
+        lastFrameTime = now;
+
+        // Apply tempo scaling to the time delta
         const tempoScale = parseInt(tempoSlider.value) / songOriginalTempo;
-        const songElapsed = (elapsedSeconds - songStartTime) * tempoScale;
+        songPlaybackPosition += deltaTime * tempoScale;
 
         for (const songNote of songNotes) {
-            const barStartX = nowX + (songNote.startTime - songElapsed) * PIXELS_PER_SECOND;
-            const barEndX = nowX + (songNote.endTime - songElapsed) * PIXELS_PER_SECOND;
+            const barStartX = nowX + (songNote.startTime - songPlaybackPosition) * PIXELS_PER_SECOND;
+            const barEndX = nowX + (songNote.endTime - songPlaybackPosition) * PIXELS_PER_SECOND;
             const barWidth = barEndX - barStartX;
 
             // Only draw notes that are visible
@@ -325,7 +331,7 @@ function animate() {
         }
 
         // Auto-stop when song is finished
-        if (songElapsed > songNotes[songNotes.length - 1].endTime + 2) {
+        if (songPlaybackPosition > songNotes[songNotes.length - 1].endTime + 2) {
             stopSong();
         }
     }
@@ -675,12 +681,12 @@ function playSong() {
 
     songPlaying = true;
 
-    // Calculate start time so first note appears at far right edge
+    // Calculate start position so first note appears at far right edge
     // nowX is at 50% of canvas width, we want notes to start at 100% (right edge)
     // Time needed to scroll from right edge to nowX = (canvasWidth * 0.5) / PIXELS_PER_SECOND
-    const currentElapsed = (performance.now() - startTime) / 1000;
     const scrollTime = (pianoRollCanvas.width * 0.5) / PIXELS_PER_SECOND;
-    songStartTime = currentElapsed - scrollTime;
+    songPlaybackPosition = -scrollTime; // Start negative so first note appears at right edge
+    lastFrameTime = performance.now();
 
     playSongBtn.style.display = 'none';
     stopSongBtn.style.display = 'inline-block';
@@ -689,7 +695,8 @@ function playSong() {
 
 function stopSong() {
     songPlaying = false;
-    songStartTime = null;
+    songPlaybackPosition = 0;
+    lastFrameTime = null;
 
     playSongBtn.style.display = 'inline-block';
     stopSongBtn.style.display = 'none';
