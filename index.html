@@ -76,10 +76,22 @@
             </div>
 
             <div id="transcriptDisplay" class="transcript-display">
-                <div class="piano-roll-container">
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: 600; color: #333; margin-right: 10px;">View:</label>
+                    <button id="togglePianoRoll" class="btn" style="padding: 6px 16px; font-size: 13px; background: #667eea; color: white;">Piano Roll</button>
+                    <button id="toggleSheetMusic" class="btn" style="padding: 6px 16px; font-size: 13px; background: #6c757d; color: white;">Sheet Music</button>
+                </div>
+
+                <div class="piano-roll-container" id="pianoRollView">
                     <div class="note-labels" id="noteLabels"></div>
                     <div class="scroll-container" id="scrollContainer">
                         <canvas id="pianoRollCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="sheet-music-container" id="sheetMusicView" style="display: none;">
+                    <div class="scroll-container" style="height: 400px; overflow: hidden; position: relative; background: #f8f9fa; border-radius: 8px;">
+                        <canvas id="sheetMusicCanvas"></canvas>
                     </div>
                 </div>
             </div>
@@ -118,7 +130,7 @@
         </div>
 
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 0.85em;">
-            Version 1.9.0
+            Version 1.10.0
         </div>
     </div>
 

@@ -19,6 +19,13 @@ const pianoRollCanvas = document.getElementById('pianoRollCanvas');
 const noteLabels = document.getElementById('noteLabels');
 const scrollContainer = document.getElementById('scrollContainer');
 
+// DOM elements - Sheet Music View
+const sheetMusicCanvas = document.getElementById('sheetMusicCanvas');
+const pianoRollView = document.getElementById('pianoRollView');
+const sheetMusicView = document.getElementById('sheetMusicView');
+const togglePianoRollBtn = document.getElementById('togglePianoRoll');
+const toggleSheetMusicBtn = document.getElementById('toggleSheetMusic');
+
 // DOM elements - Song playback
 const songInput = document.getElementById('songInput');
 const playSongBtn = document.getElementById('playSong');
@@ -52,6 +59,18 @@ const TOTAL_NOTES = MAX_MIDI - MIN_MIDI + 1;
 let ctx = null;
 let animationFrameId = null;
 let startTime = null;
+
+// Sheet music canvas context
+let sheetCtx = null;
+let currentView = 'pianoRoll'; // 'pianoRoll' or 'sheetMusic'
+
+// Sheet music constants
+const STAFF_LINE_SPACING = 12; // Pixels between staff lines
+const STAFF_TOP_MARGIN = 60; // Top margin for first staff
+const STAFF_BOTTOM_MARGIN = 60; // Bottom margin
+const NOTE_HEAD_WIDTH = 10;
+const NOTE_HEAD_HEIGHT = 8;
+const SHEET_PIXELS_PER_SECOND = 80; // Vertical scroll speed for sheet music
 
 // Song playback
 let songNotes = []; // Array of {note, startTime, endTime, yPosition, midi}
@@ -418,6 +437,9 @@ function animate() {
             }
         }
     }
+
+    // Draw sheet music view if active
+    drawSheetMusic();
 
     animationFrameId = requestAnimationFrame(animate);
 }
@@ -795,6 +817,179 @@ loadExampleBtn.addEventListener('click', loadExampleSong);
 transposeUpBtn.addEventListener('click', transposeUp);
 transposeDownBtn.addEventListener('click', transposeDown);
 
+// Sheet Music View Functions
+
+function initSheetMusic() {
+    sheetCtx = sheetMusicCanvas.getContext('2d');
+    resizeSheetMusicCanvas();
+}
+
+function resizeSheetMusicCanvas() {
+    const container = sheetMusicCanvas.parentElement;
+    const rect = container.getBoundingClientRect();
+    sheetMusicCanvas.width = rect.width;
+    sheetMusicCanvas.height = 400;
+}
+
+// Convert MIDI note to staff position (in half-steps from middle line)
+// For treble clef, the lines from bottom to top are: E4, G4, B4, D5, F5
+// Middle line (3rd line) = B4 (MIDI 71)
+function getMidiStaffPosition(midi) {
+    // B4 = MIDI 71 = position 0 (middle line of staff)
+    // Each half-step = 0.5 staff line spacing
+    const B4_MIDI = 71;
+    const halfStepsFromB4 = midi - B4_MIDI;
+    return -halfStepsFromB4 * 0.5; // Negative because higher notes go up
+}
+
+function drawStaffLines(ctx, y, width) {
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+
+    // Draw 5 horizontal lines
+    for (let i = 0; i < 5; i++) {
+        const lineY = y + i * STAFF_LINE_SPACING;
+        ctx.beginPath();
+        ctx.moveTo(0, lineY);
+        ctx.lineTo(width, lineY);
+        ctx.stroke();
+    }
+
+    // Draw treble clef (simplified - using text as approximation)
+    ctx.font = 'bold 48px serif';
+    ctx.fillStyle = '#333';
+    ctx.fillText('𝄞', 10, y + STAFF_LINE_SPACING * 3.5);
+}
+
+function drawNoteHead(ctx, x, y, filled = true) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 8); // Slight rotation for oval shape
+
+    ctx.beginPath();
+    ctx.ellipse(0, 0, NOTE_HEAD_WIDTH / 2, NOTE_HEAD_HEIGHT / 2, 0, 0, Math.PI * 2);
+
+    if (filled) {
+        ctx.fillStyle = '#333';
+        ctx.fill();
+    } else {
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function drawLedgerLine(ctx, x, y, width = NOTE_HEAD_WIDTH + 4) {
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - width / 2, y);
+    ctx.lineTo(x + width / 2, y);
+    ctx.stroke();
+}
+
+function drawSheetMusic() {
+    if (!sheetCtx || currentView !== 'sheetMusic') return;
+
+    const width = sheetMusicCanvas.width;
+    const height = sheetMusicCanvas.height;
+
+    // Clear canvas
+    sheetCtx.clearRect(0, 0, width, height);
+    sheetCtx.fillStyle = '#f8f9fa';
+    sheetCtx.fillRect(0, 0, width, height);
+
+    // Calculate staff center position
+    const staffCenterY = height * 0.5; // Middle of canvas
+    const staffTopLineY = staffCenterY - STAFF_LINE_SPACING * 2; // Top of 5-line staff
+
+    // Draw staff lines
+    drawStaffLines(sheetCtx, staffTopLineY, width);
+
+    // Draw playback line (blue bar at 50% height)
+    const nowY = staffCenterY;
+    sheetCtx.strokeStyle = '#667eea';
+    sheetCtx.lineWidth = 3;
+    sheetCtx.beginPath();
+    sheetCtx.moveTo(0, nowY);
+    sheetCtx.lineTo(width, nowY);
+    sheetCtx.stroke();
+
+    // Draw song notes if playing
+    if (songNotes.length > 0) {
+        for (const songNote of songNotes) {
+            // Calculate Y position based on time offset from playback position
+            // Notes scroll from bottom to top
+            const timeOffset = songNote.startTime - songPlaybackPosition;
+            const noteY = nowY - (timeOffset * SHEET_PIXELS_PER_SECOND);
+
+            // Only draw notes that are visible
+            if (noteY > -20 && noteY < height + 20) {
+                // Calculate staff position for this MIDI note
+                const staffPos = getMidiStaffPosition(songNote.midi);
+                const noteStaffY = staffCenterY + (staffPos * STAFF_LINE_SPACING);
+
+                // Determine if note has passed the blue line
+                const hasPassed = noteY > nowY;
+                const noteX = width / 2; // Center horizontally
+
+                // Draw ledger lines for notes outside the staff
+                // Staff lines are at positions: -2, -1, 0, 1, 2 (where 0 is middle line)
+                const staffPosRounded = Math.round(staffPos);
+                if (staffPosRounded < -2) {
+                    // Above staff - draw ledger lines
+                    for (let i = -3; i >= staffPosRounded; i--) {
+                        if (i % 2 !== 0) continue; // Only on line positions
+                        const ledgerY = staffCenterY + (i * STAFF_LINE_SPACING);
+                        drawLedgerLine(sheetCtx, noteX, ledgerY);
+                    }
+                } else if (staffPosRounded > 2) {
+                    // Below staff - draw ledger lines
+                    for (let i = 3; i <= staffPosRounded; i++) {
+                        if (i % 2 !== 0) continue; // Only on line positions
+                        const ledgerY = staffCenterY + (i * STAFF_LINE_SPACING);
+                        drawLedgerLine(sheetCtx, noteX, ledgerY);
+                    }
+                }
+
+                // Draw note head
+                if (hasPassed) {
+                    sheetCtx.globalAlpha = 0.3; // Muted for passed notes
+                }
+
+                // Quarter notes are filled, whole notes are open
+                const duration = songNote.endTime - songNote.startTime;
+                const isFilled = duration < 1.5; // Less than 1.5 seconds = filled note
+
+                drawNoteHead(sheetCtx, noteX, noteStaffY, isFilled);
+
+                // Draw stem for quarter notes
+                if (isFilled) {
+                    sheetCtx.strokeStyle = '#333';
+                    sheetCtx.lineWidth = 1.5;
+                    sheetCtx.beginPath();
+
+                    // Stem goes up if note is below middle line, down if above
+                    if (staffPos > 0) {
+                        // Stem up
+                        sheetCtx.moveTo(noteX + NOTE_HEAD_WIDTH / 2 - 1, noteStaffY);
+                        sheetCtx.lineTo(noteX + NOTE_HEAD_WIDTH / 2 - 1, noteStaffY - STAFF_LINE_SPACING * 3.5);
+                    } else {
+                        // Stem down
+                        sheetCtx.moveTo(noteX - NOTE_HEAD_WIDTH / 2 + 1, noteStaffY);
+                        sheetCtx.lineTo(noteX - NOTE_HEAD_WIDTH / 2 + 1, noteStaffY + STAFF_LINE_SPACING * 3.5);
+                    }
+                    sheetCtx.stroke();
+                }
+
+                sheetCtx.globalAlpha = 1.0;
+            }
+        }
+    }
+}
+
 // Clear song data when user edits the text (so it reloads on next play)
 songInput.addEventListener('input', () => {
     if (!songInput.disabled) {  // Only clear if not currently playing
@@ -802,8 +997,32 @@ songInput.addEventListener('input', () => {
     }
 });
 
+// View toggle handlers
+togglePianoRollBtn.addEventListener('click', () => {
+    currentView = 'pianoRoll';
+    pianoRollView.style.display = 'block';
+    sheetMusicView.style.display = 'none';
+    togglePianoRollBtn.style.background = '#667eea';
+    toggleSheetMusicBtn.style.background = '#6c757d';
+});
+
+toggleSheetMusicBtn.addEventListener('click', () => {
+    currentView = 'sheetMusic';
+    pianoRollView.style.display = 'none';
+    sheetMusicView.style.display = 'block';
+    togglePianoRollBtn.style.background = '#6c757d';
+    toggleSheetMusicBtn.style.background = '#667eea';
+    resizeSheetMusicCanvas();
+});
+
 // Handle window resize
-window.addEventListener('resize', resizeCanvas);
+window.addEventListener('resize', () => {
+    resizeCanvas();
+    if (currentView === 'sheetMusic') {
+        resizeSheetMusicCanvas();
+    }
+});
 
 // Initialize piano roll when page loads
 initPianoRoll();
+initSheetMusic();
