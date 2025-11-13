@@ -3,6 +3,7 @@ class Tuner {
         this.audioContext = null;
         this.analyser = null;
         this.microphone = null;
+        this.stream = null; // Store stream to stop it later
         this.bufferLength = 2048;
         this.buffer = new Float32Array(this.bufferLength);
         this.isRunning = false;
@@ -15,7 +16,7 @@ class Tuner {
     async start() {
         try {
             // Request microphone access
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
             // Create audio context
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -25,7 +26,7 @@ class Tuner {
             this.analyser.fftSize = this.bufferLength * 2;
 
             // Connect microphone to analyser
-            this.microphone = this.audioContext.createMediaStreamSource(stream);
+            this.microphone = this.audioContext.createMediaStreamSource(this.stream);
             this.microphone.connect(this.analyser);
 
             this.isRunning = true;
@@ -48,7 +49,10 @@ class Tuner {
 
         if (this.microphone) {
             this.microphone.disconnect();
-            this.microphone.mediaStream.getTracks().forEach(track => track.stop());
+        }
+
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
         }
 
         if (this.audioContext) {
@@ -76,7 +80,7 @@ class Tuner {
     }
 
     autoCorrelate(buffer, sampleRate) {
-        // Implements autocorrelation algorithm for pitch detection
+        // Implements the autocorrelation algorithm for pitch detection
         let size = buffer.length;
         let maxSamples = Math.floor(size / 2);
         let bestOffset = -1;
@@ -93,44 +97,59 @@ class Tuner {
         // Not enough signal
         if (rms < 0.01) return -1;
 
-        // Find the best correlation offset
-        let lastCorrelation = 1;
-        for (let offset = 0; offset < maxSamples; offset++) {
+        // Calculate the autocorrelation for each offset
+        // Start from a minimum offset to avoid detecting impossibly high frequencies
+        // For a max frequency of ~4000 Hz at 48000 sample rate, min offset = 48000/4000 = 12
+        let minOffset = Math.floor(sampleRate / 4000); // Start at ~4000 Hz max
+
+        for (let offset = minOffset; offset < maxSamples; offset++) {
             let correlation = 0;
 
+            // Calculate autocorrelation: sum of products (NOT differences!)
             for (let i = 0; i < maxSamples; i++) {
-                correlation += Math.abs(buffer[i] - buffer[i + offset]);
+                correlation += buffer[i] * buffer[i + offset];
             }
 
-            correlation = 1 - (correlation / maxSamples);
+            // Normalize correlation
+            correlation = correlation / maxSamples;
 
-            if (correlation > 0.9 && correlation > lastCorrelation) {
-                let foundGoodCorrelation = false;
+            // Track the best correlation
+            if (correlation > bestCorrelation) {
+                bestCorrelation = correlation;
+                bestOffset = offset;
+            }
+        }
 
-                // Check if we found a good correlation
-                if (correlation > bestCorrelation) {
-                    bestCorrelation = correlation;
-                    bestOffset = offset;
-                    foundGoodCorrelation = true;
+        // Check if we found a strong enough correlation
+        // Lower threshold to 0.01 * rms to be more sensitive
+        if (bestCorrelation > 0.01 && bestOffset !== -1) {
+            // Refine the offset using parabolic interpolation
+            // This gives us sub-sample accuracy
+            if (bestOffset > minOffset && bestOffset < maxSamples - 1) {
+                // Get correlation values around the peak
+                let y1 = 0, y2 = bestCorrelation, y3 = 0;
+
+                // Calculate correlation for offset-1
+                for (let i = 0; i < maxSamples; i++) {
+                    y1 += buffer[i] * buffer[i + bestOffset - 1];
                 }
+                y1 = y1 / maxSamples;
 
-                if (foundGoodCorrelation) {
-                    // Refine offset using parabolic interpolation
-                    let shift = 0;
-                    if (offset > 0 && offset < maxSamples - 1) {
-                        let y1 = lastCorrelation;
-                        let y2 = correlation;
+                // Calculate correlation for offset+1
+                for (let i = 0; i < maxSamples; i++) {
+                    y3 += buffer[i] * buffer[i + bestOffset + 1];
+                }
+                y3 = y3 / maxSamples;
 
-                        shift = (y1 - correlation) / (2 * (2 * correlation - y1 - correlation));
-                    }
+                // Parabolic interpolation formula
+                let shift = (y1 - y3) / (2 * (2 * y2 - y1 - y3));
+
+                // Avoid invalid shifts
+                if (isFinite(shift) && Math.abs(shift) < 1) {
                     return sampleRate / (bestOffset + shift);
                 }
             }
 
-            lastCorrelation = correlation;
-        }
-
-        if (bestCorrelation > 0.01) {
             return sampleRate / bestOffset;
         }
 
