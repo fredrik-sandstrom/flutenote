@@ -5,8 +5,6 @@ function autoCorrelate(buffer, sampleRate) {
     // Implements the autocorrelation algorithm for pitch detection
     let size = buffer.length;
     let maxSamples = Math.floor(size / 2);
-    let bestOffset = -1;
-    let bestCorrelation = 0;
     let rms = 0;
 
     // Calculate RMS (root mean square) to detect if there's enough signal
@@ -19,60 +17,78 @@ function autoCorrelate(buffer, sampleRate) {
     // Not enough signal
     if (rms < 0.01) return -1;
 
-    // Calculate the autocorrelation for each offset
-    // Start from a minimum offset to avoid detecting impossibly high frequencies
-    let minOffset = Math.floor(sampleRate / 4000); // Start at ~4000 Hz max
+    // Calculate zero-lag autocorrelation (for normalization)
+    let r0 = 0;
+    for (let i = 0; i < maxSamples; i++) {
+        r0 += buffer[i] * buffer[i];
+    }
 
-    for (let offset = minOffset; offset < maxSamples; offset++) {
+    // Find the first peak in the autocorrelation function
+    // Start from a minimum offset to avoid detecting impossibly high frequencies
+    let minOffset = Math.floor(sampleRate / 4000); // ~4000 Hz max
+    let maxOffset = Math.floor(sampleRate / 80);   // ~80 Hz min (below lowest flute note)
+
+    // Store correlation values
+    let correlations = new Float32Array(maxOffset - minOffset + 1);
+
+    for (let offset = minOffset; offset <= maxOffset; offset++) {
         let correlation = 0;
 
-        // Calculate autocorrelation: sum of products (NOT differences!)
+        // Calculate autocorrelation at this offset
         for (let i = 0; i < maxSamples; i++) {
             correlation += buffer[i] * buffer[i + offset];
         }
 
-        // Normalize correlation
-        correlation = correlation / maxSamples;
+        // Normalize by zero-lag autocorrelation
+        correlations[offset - minOffset] = correlation / r0;
+    }
 
-        // Track the best correlation
-        if (correlation > bestCorrelation) {
-            bestCorrelation = correlation;
-            bestOffset = offset;
+    // Find the first peak that crosses our threshold
+    // A peak is where correlation goes up then down, and exceeds threshold
+    let threshold = 0.5; // Require 50% correlation
+    let foundPeak = false;
+    let peakOffset = -1;
+    let peakValue = -1;
+
+    for (let i = 1; i < correlations.length - 1; i++) {
+        let offset = minOffset + i;
+
+        // Check if this is a local maximum
+        if (correlations[i] > correlations[i - 1] &&
+            correlations[i] >= correlations[i + 1] &&
+            correlations[i] > threshold) {
+
+            peakOffset = offset;
+            peakValue = correlations[i];
+            foundPeak = true;
+            break; // Take the FIRST good peak (fundamental frequency)
         }
     }
 
-    // Check if we found a strong enough correlation
-    if (bestCorrelation > 0.01 && bestOffset !== -1) {
-        // Refine the offset using parabolic interpolation
-        if (bestOffset > minOffset && bestOffset < maxSamples - 1) {
-            // Get correlation values around the peak
-            let y1 = 0, y2 = bestCorrelation, y3 = 0;
-
-            // Calculate correlation for offset-1
-            for (let i = 0; i < maxSamples; i++) {
-                y1 += buffer[i] * buffer[i + bestOffset - 1];
-            }
-            y1 = y1 / maxSamples;
-
-            // Calculate correlation for offset+1
-            for (let i = 0; i < maxSamples; i++) {
-                y3 += buffer[i] * buffer[i + bestOffset + 1];
-            }
-            y3 = y3 / maxSamples;
-
-            // Parabolic interpolation formula
-            let shift = (y1 - y3) / (2 * (2 * y2 - y1 - y3));
-
-            // Avoid invalid shifts
-            if (isFinite(shift) && Math.abs(shift) < 1) {
-                return sampleRate / (bestOffset + shift);
-            }
-        }
-
-        return sampleRate / bestOffset;
+    if (!foundPeak) {
+        return -1;
     }
 
-    return -1;
+    // Refine the peak using parabolic interpolation for sub-sample accuracy
+    let shift = 0;
+    if (peakOffset > minOffset && peakOffset < maxOffset) {
+        let y1 = correlations[peakOffset - minOffset - 1];
+        let y2 = correlations[peakOffset - minOffset];
+        let y3 = correlations[peakOffset - minOffset + 1];
+
+        // Parabolic interpolation formula
+        let denominator = 2 * (2 * y2 - y1 - y3);
+        if (denominator !== 0) {
+            shift = (y1 - y3) / denominator;
+
+            // Clamp shift to reasonable range
+            if (!isFinite(shift) || Math.abs(shift) > 1) {
+                shift = 0;
+            }
+        }
+    }
+
+    return sampleRate / (peakOffset + shift);
 }
 
 function frequencyToNote(frequency) {
