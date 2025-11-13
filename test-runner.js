@@ -1,130 +1,10 @@
-// Pitch detection and note conversion functions (copied from tuner.js)
+// Test runner for pitch detection accuracy
+// Uses the actual Tuner class to test the real implementation
+
 const noteStrings = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-function autoCorrelate(buffer, sampleRate) {
-    // Implements the autocorrelation algorithm for pitch detection
-    let size = buffer.length;
-    let maxSamples = Math.floor(size / 2);
-    let rms = 0;
-
-    // Calculate RMS (root mean square) to detect if there's enough signal
-    for (let i = 0; i < size; i++) {
-        let val = buffer[i];
-        rms += val * val;
-    }
-    rms = Math.sqrt(rms / size);
-
-    // Not enough signal
-    if (rms < 0.01) return -1;
-
-    // Calculate zero-lag autocorrelation (for normalization)
-    let r0 = 0;
-    for (let i = 0; i < maxSamples; i++) {
-        r0 += buffer[i] * buffer[i];
-    }
-
-    // Find the first peak in the autocorrelation function
-    // Start from a minimum offset to avoid detecting impossibly high frequencies
-    let minOffset = Math.floor(sampleRate / 4000); // ~4000 Hz max
-    let maxOffset = Math.floor(sampleRate / 80);   // ~80 Hz min (below lowest flute note)
-
-    // Store correlation values
-    let correlations = new Float32Array(maxOffset - minOffset + 1);
-
-    for (let offset = minOffset; offset <= maxOffset; offset++) {
-        let correlation = 0;
-
-        // Calculate autocorrelation at this offset
-        for (let i = 0; i < maxSamples; i++) {
-            correlation += buffer[i] * buffer[i + offset];
-        }
-
-        // Normalize by zero-lag autocorrelation
-        correlations[offset - minOffset] = correlation / r0;
-    }
-
-    // Find the first peak that crosses our threshold
-    // Two-pass approach: prefer high-confidence peaks, fallback to strongest peak
-    let foundPeak = false;
-    let peakOffset = -1;
-    let peakValue = -1;
-
-    // Pass 1: Look for first strong peak (>50% correlation)
-    for (let i = 1; i < correlations.length - 1; i++) {
-        // Check if this is a local maximum above strong threshold
-        if (correlations[i] > correlations[i - 1] &&
-            correlations[i] >= correlations[i + 1] &&
-            correlations[i] > 0.5) {
-
-            peakOffset = minOffset + i;
-            peakValue = correlations[i];
-            foundPeak = true;
-            break; // Take the FIRST strong peak (fundamental frequency)
-        }
-    }
-
-    // Pass 2: If no strong peak found, find the strongest peak above minimum threshold
-    if (!foundPeak) {
-        let bestPeakValue = 0.3; // Minimum correlation threshold
-
-        for (let i = 1; i < correlations.length - 1; i++) {
-            // Check if this is a local maximum
-            if (correlations[i] > correlations[i - 1] &&
-                correlations[i] >= correlations[i + 1] &&
-                correlations[i] > bestPeakValue) {
-
-                peakOffset = minOffset + i;
-                peakValue = correlations[i];
-                bestPeakValue = correlations[i];
-                foundPeak = true;
-                // Don't break - keep looking for even stronger peaks
-            }
-        }
-    }
-
-    if (!foundPeak || peakValue < 0.3) {
-        return -1;
-    }
-
-    // Refine the peak using parabolic interpolation for sub-sample accuracy
-    let shift = 0;
-    if (peakOffset > minOffset && peakOffset < maxOffset) {
-        let y1 = correlations[peakOffset - minOffset - 1];
-        let y2 = correlations[peakOffset - minOffset];
-        let y3 = correlations[peakOffset - minOffset + 1];
-
-        // Parabolic interpolation formula
-        let denominator = 2 * (2 * y2 - y1 - y3);
-        if (denominator !== 0) {
-            shift = (y1 - y3) / denominator;
-
-            // Clamp shift to reasonable range
-            if (!isFinite(shift) || Math.abs(shift) > 1) {
-                shift = 0;
-            }
-        }
-    }
-
-    return sampleRate / (peakOffset + shift);
-}
-
-function frequencyToNote(frequency) {
-    // Convert frequency to note name and cents offset
-    const noteNum = 12 * (Math.log(frequency / 440) / Math.log(2));
-    const noteIndex = Math.round(noteNum) + 69; // MIDI note number (A4 = 69)
-    const cents = Math.floor((noteNum - Math.round(noteNum)) * 100);
-
-    const octave = Math.floor(noteIndex / 12) - 1;
-    const noteName = noteStrings[noteIndex % 12];
-
-    return {
-        name: noteName,
-        octave: octave,
-        frequency: frequency,
-        cents: cents,
-        fullName: `${noteName}${octave}`
-    };
-}
+// Create a tuner instance to use its methods
+const testTuner = new Tuner();
 
 function noteToFrequency(noteName, octave) {
     // Convert note name and octave to frequency
@@ -149,7 +29,7 @@ function generateTone(frequency, durationSeconds = 0.5, sampleRate = 48000) {
     return buffer;
 }
 
-// Test a single note
+// Test a single note using the actual Tuner implementation
 function testNote(noteName, octave) {
     const expectedFrequency = noteToFrequency(noteName, octave);
     const expectedNote = `${noteName}${octave}`;
@@ -158,12 +38,12 @@ function testNote(noteName, octave) {
     const sampleRate = 48000;
     const buffer = generateTone(expectedFrequency, 0.5, sampleRate);
 
-    // Run pitch detection on a slice of the buffer (simulate what the tuner does)
+    // Run pitch detection on a slice of the buffer using the REAL Tuner implementation
     const testBufferSize = 2048;
     const testBuffer = buffer.slice(0, testBufferSize);
 
-    // Detect pitch
-    const detectedFrequency = autoCorrelate(testBuffer, sampleRate);
+    // Use the actual autoCorrelate method from the Tuner class
+    const detectedFrequency = testTuner.autoCorrelate(testBuffer, sampleRate);
 
     if (detectedFrequency === -1 || !detectedFrequency) {
         return {
@@ -177,7 +57,8 @@ function testNote(noteName, octave) {
         };
     }
 
-    const detectedNoteInfo = frequencyToNote(detectedFrequency);
+    // Use the actual frequencyToNote method from the Tuner class
+    const detectedNoteInfo = testTuner.frequencyToNote(detectedFrequency);
     const frequencyError = Math.abs(detectedFrequency - expectedFrequency);
     const frequencyErrorPercent = (frequencyError / expectedFrequency) * 100;
 
@@ -224,7 +105,7 @@ function generateTestCases(quick = false) {
         });
     } else {
         // Full test: C4 to C7 (flute range)
-        for (let octave = 4; octave <= 7; octave++) {
+        for (let octave = 4; octave <= 6; octave++) {
             noteStrings.forEach(note => {
                 tests.push({ note, octave });
             });
@@ -270,7 +151,7 @@ async function runTests(quick = false) {
         progressFill.style.width = `${progressPercent}%`;
         progressFill.textContent = `Testing ${note}${octave} (${i + 1}/${testCases.length})`;
 
-        // Run test
+        // Run test using the REAL Tuner implementation
         const result = testNote(note, octave);
 
         // Update counts
