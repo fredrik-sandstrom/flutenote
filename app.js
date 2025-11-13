@@ -460,6 +460,142 @@ function clearTranscript() {
 clearTranscriptBtn.addEventListener('click', clearTranscript);
 
 // Song playback functions
+
+// ABC Notation Parser
+function parseABCNotation(abcString) {
+    const lines = abcString.split('\n');
+    let defaultLength = 1/8; // Default to eighth note
+    let tempo = 120; // Default tempo (quarter notes per minute)
+    let keySignature = 'C'; // Default key
+    let tuneBody = '';
+
+    // Parse header and body
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('L:')) {
+            // Parse default note length (e.g., "L:1/8")
+            const match = trimmed.match(/L:\s*(\d+)\/(\d+)/);
+            if (match) {
+                defaultLength = parseInt(match[1]) / parseInt(match[2]);
+            }
+        } else if (trimmed.startsWith('Q:')) {
+            // Parse tempo (e.g., "Q:1/4=120")
+            const match = trimmed.match(/Q:.*=(\d+)/);
+            if (match) {
+                tempo = parseInt(match[1]);
+            }
+        } else if (trimmed.startsWith('K:')) {
+            // Parse key signature
+            keySignature = trimmed.substring(2).trim();
+        } else if (trimmed && !trimmed.match(/^[A-Z]:/)) {
+            // This is part of the tune body
+            tuneBody += ' ' + trimmed;
+        }
+    }
+
+    // Parse the tune body
+    const notes = parseABCTuneBody(tuneBody, defaultLength, tempo, keySignature);
+    return notes;
+}
+
+function parseABCTuneBody(body, defaultLength, tempo, keySignature) {
+    const parsed = [];
+    let currentTime = 0;
+
+    // Remove bar lines and clean up
+    body = body.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+
+    // Token pattern: accidental? + note letter + octave markers? + duration?
+    const tokenPattern = /(\^{1,2}|_{1,2}|=)?([A-Ga-g]|z)(,{1,2}|'{1,2})?(\d+)?(\/\d+)?/g;
+
+    let match;
+    while ((match = tokenPattern.exec(body)) !== null) {
+        const accidental = match[1] || '';
+        const noteLetter = match[2];
+        const octaveMarker = match[3] || '';
+        const multiplier = match[4] ? parseInt(match[4]) : 1;
+        const divisor = match[5] ? parseInt(match[5].substring(1)) : 1;
+
+        // Skip rests for now
+        if (noteLetter === 'z') {
+            const duration = (defaultLength * multiplier / divisor) * (240 / tempo); // Convert to seconds
+            currentTime += duration;
+            continue;
+        }
+
+        // Calculate duration in seconds
+        // defaultLength is in quarter note units (e.g., 1/8 = 0.125 quarter notes)
+        // tempo is quarter notes per minute
+        const noteDuration = (defaultLength * multiplier / divisor) * (240 / tempo);
+
+        // Convert ABC note to MIDI
+        const midi = abcNoteToMidi(noteLetter, octaveMarker, accidental, keySignature);
+
+        if (midi && midi >= MIN_MIDI && midi <= MAX_MIDI) {
+            parsed.push({
+                note: midiToNoteName(midi),
+                startTime: currentTime,
+                endTime: currentTime + noteDuration,
+                yPosition: getYPosition(midi),
+                midi: midi
+            });
+        }
+
+        currentTime += noteDuration;
+    }
+
+    return parsed;
+}
+
+function abcNoteToMidi(noteLetter, octaveMarker, accidental, keySignature) {
+    // Base notes (C=0, D=2, E=4, F=5, G=7, A=9, B=11)
+    const noteOffsets = {
+        'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11,
+        'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11
+    };
+
+    const baseNote = noteLetter.toUpperCase();
+    let semitone = noteOffsets[baseNote];
+
+    // ABC octave convention:
+    // C, D, E, F, G, A, B = middle octave (C4-B4) = MIDI 60-71
+    // c, d, e, f, g, a, b = one octave up (C5-B5) = MIDI 72-83
+    // C,, = C2 (MIDI 36), C, = C3 (MIDI 48), C = C4 (MIDI 60), c = C5 (MIDI 72), c' = C6 (MIDI 84)
+
+    let octave = 5; // Default for uppercase letters is C4 which is octave 4 in scientific pitch, but C=60 in MIDI
+
+    if (noteLetter === noteLetter.toLowerCase()) {
+        // Lowercase = one octave higher
+        octave = 6;
+    }
+
+    // Apply octave markers
+    if (octaveMarker === ",,") octave -= 2;
+    else if (octaveMarker === ",") octave -= 1;
+    else if (octaveMarker === "'") octave += 1;
+    else if (octaveMarker === "''") octave += 2;
+
+    // Apply accidentals
+    if (accidental === '^') semitone += 1; // Sharp
+    else if (accidental === '^^') semitone += 2; // Double sharp
+    else if (accidental === '_') semitone -= 1; // Flat
+    else if (accidental === '__') semitone -= 2; // Double flat
+
+    // Calculate MIDI number
+    // In MIDI: C4 = 60, so C5 = 72, C6 = 84, etc.
+    // octave 5 in our system = C4 in scientific = MIDI 60
+    const midi = (octave - 1) * 12 + semitone;
+
+    return midi;
+}
+
+function midiToNoteName(midi) {
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const octave = Math.floor(midi / 12) - 1;
+    const noteName = noteNames[midi % 12];
+    return noteName + octave;
+}
+
 function parseSongNotation(notation) {
     const parsed = [];
     let currentTime = 0;
@@ -500,9 +636,16 @@ function playSong() {
         return;
     }
 
-    songNotes = parseSongNotation(notation);
+    // Try to parse as ABC notation first (check for ABC headers or just ABC-style notes)
+    if (notation.includes('K:') || notation.includes('L:') || notation.match(/[A-Ga-g][,']?[0-9/]?\s/)) {
+        songNotes = parseABCNotation(notation);
+    } else {
+        // Fall back to simple notation
+        songNotes = parseSongNotation(notation);
+    }
+
     if (songNotes.length === 0) {
-        alert('No valid notes found. Format: C4:1.0 D4:0.5 E4:0.5');
+        alert('No valid notes found. Please check the ABC notation format.');
         return;
     }
 
@@ -525,7 +668,13 @@ function stopSong() {
 }
 
 function loadExampleSong() {
-    songInput.value = 'C4:0.5 D4:0.5 E4:0.5 F4:0.5 G4:1.0 G4:1.0 A4:0.5 A4:0.5 A4:0.5 A4:0.5 G4:2.0 F4:0.5 F4:0.5 F4:0.5 F4:0.5 E4:1.0 E4:1.0 D4:0.5 D4:0.5 D4:0.5 D4:0.5 C4:2.0';
+    // Twinkle Twinkle Little Star in ABC notation
+    songInput.value = `L:1/4
+Q:1/4=120
+K:C
+C C G G | A A G2 | F F E E | D D C2 |
+G G F F | E E D2 | G G F F | E E D2 |
+C C G G | A A G2 | F F E E | D D C2 |`;
 }
 
 // Song event handlers
