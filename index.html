@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flute Tuner & Metronome</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Flute Tuner & Metronome</h1>
+
+        <!-- Tuner Section -->
+        <div class="section tuner-section">
+            <h2>Tuner</h2>
+            <button id="startTuner" class="btn btn-primary">Start Tuner</button>
+            <button id="stopTuner" class="btn btn-secondary" style="display: none;">Stop Tuner</button>
+
+            <div id="tunerDisplay" class="tuner-display">
+                <div class="note-display">
+                    <div id="noteText" class="note-text">--</div>
+                    <div id="frequency" class="frequency">0 Hz</div>
+                </div>
+
+                <div class="tuner-meter">
+                    <div class="meter-marks">
+                        <span class="mark">-50</span>
+                        <span class="mark">-25</span>
+                        <span class="mark center">0</span>
+                        <span class="mark">+25</span>
+                        <span class="mark">+50</span>
+                    </div>
+                    <div class="meter-bar">
+                        <div id="meterNeedle" class="meter-needle"></div>
+                    </div>
+                    <div id="centsDisplay" class="cents-display">0 cents</div>
+                </div>
+
+                <div class="status-indicator">
+                    <div id="statusDot" class="status-dot"></div>
+                    <span id="statusText">Tuner stopped</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metronome Section -->
+        <div class="section metronome-section">
+            <h2>Metronome</h2>
+            <div class="metronome-controls">
+                <div class="tempo-control">
+                    <label for="tempoSlider">Tempo: <span id="tempoDisplay">120</span> BPM</label>
+                    <input type="range" id="tempoSlider" min="40" max="208" value="120" step="1">
+                </div>
+
+                <div class="beat-control">
+                    <label for="beatsPerMeasure">Beats per measure:</label>
+                    <select id="beatsPerMeasure">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4" selected>4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                    </select>
+                </div>
+
+                <button id="startMetronome" class="btn btn-primary">Start Metronome</button>
+                <button id="stopMetronome" class="btn btn-secondary" style="display: none;">Stop Metronome</button>
+            </div>
+
+            <div class="metronome-display">
+                <div id="beatIndicator" class="beat-indicator">
+                    <div class="beat-dots"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="tuner.js"></script>
+    <script src="metronome.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
