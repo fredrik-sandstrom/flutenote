@@ -10,7 +10,7 @@ class Metronome {
         this.timerID = null;
     }
 
-    start() {
+    start(startPhase = 0) {
         if (this.isRunning) return;
 
         // Create audio context if it doesn't exist
@@ -19,8 +19,17 @@ class Metronome {
         }
 
         this.isRunning = true;
-        this.currentBeat = 0;
-        this.nextNoteTime = this.audioContext.currentTime;
+
+        // Calculate beat timing based on start phase (0.0 to 1.0)
+        const secondsPerBeat = 60.0 / this.tempo;
+        const offsetTime = startPhase * secondsPerBeat;
+
+        // Set current beat based on phase
+        this.currentBeat = Math.floor(startPhase * this.beatsPerMeasure);
+
+        // Schedule next note with phase offset
+        this.nextNoteTime = this.audioContext.currentTime + (secondsPerBeat - offsetTime);
+
         this.scheduler();
     }
 
@@ -92,6 +101,20 @@ class Metronome {
         if (this.currentBeat >= this.beatsPerMeasure) {
             this.currentBeat = 0;
         }
+    }
+
+    getBeatPhase() {
+        // Returns the current beat phase as a value between 0.0 and 1.0
+        // 0.0 = start of beat, 1.0 = end of beat (about to start next beat)
+        if (!this.isRunning || !this.audioContext) {
+            return 0;
+        }
+
+        const secondsPerBeat = 60.0 / this.tempo;
+        const timeSinceLastBeat = this.audioContext.currentTime - (this.nextNoteTime - secondsPerBeat);
+        const phase = (timeSinceLastBeat / secondsPerBeat) % 1.0;
+
+        return phase < 0 ? 0 : phase;
     }
 
     onBeat(beatNumber, time) {

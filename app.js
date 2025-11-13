@@ -123,7 +123,19 @@ tuner.onPitchDetected = (freq, note) => {
 
 // Metronome event handlers
 startMetronomeBtn.addEventListener('click', () => {
-    metronome.start();
+    // Sync with song beat if song is playing
+    let startPhase = 0;
+    if (songPlaying) {
+        const tempo = parseInt(tempoSlider.value);
+        const secondsPerBeat = 60.0 / tempo;
+
+        // Calculate current beat phase from song position
+        // Handle negative positions properly with modulo
+        const phase = ((songPlaybackPosition % secondsPerBeat) + secondsPerBeat) % secondsPerBeat;
+        startPhase = phase / secondsPerBeat;
+    }
+
+    metronome.start(startPhase);
     startMetronomeBtn.style.display = 'none';
     stopMetronomeBtn.style.display = 'inline-block';
     updateBeatIndicator();
@@ -686,6 +698,18 @@ function playSong() {
     // Time needed to scroll from right edge to nowX = (canvasWidth * 0.5) / PIXELS_PER_SECOND
     const scrollTime = (pianoRollCanvas.width * 0.5) / PIXELS_PER_SECOND;
     songPlaybackPosition = -scrollTime; // Start negative so first note appears at right edge
+
+    // Sync with metronome beat if metronome is running
+    if (metronome.isRunning) {
+        const beatPhase = metronome.getBeatPhase();
+        const tempo = parseInt(tempoSlider.value);
+        const secondsPerBeat = 60.0 / tempo;
+
+        // Offset song position to align with metronome beat phase
+        // Positive phase means we're partway through a beat, so offset the song backward
+        songPlaybackPosition -= beatPhase * secondsPerBeat;
+    }
+
     lastFrameTime = performance.now();
 
     playSongBtn.style.display = 'none';
