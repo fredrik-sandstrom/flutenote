@@ -44,28 +44,45 @@ function autoCorrelate(buffer, sampleRate) {
     }
 
     // Find the first peak that crosses our threshold
-    // A peak is where correlation goes up then down, and exceeds threshold
-    let threshold = 0.5; // Require 50% correlation
+    // Two-pass approach: prefer high-confidence peaks, fallback to strongest peak
     let foundPeak = false;
     let peakOffset = -1;
     let peakValue = -1;
 
+    // Pass 1: Look for first strong peak (>50% correlation)
     for (let i = 1; i < correlations.length - 1; i++) {
-        let offset = minOffset + i;
-
-        // Check if this is a local maximum
+        // Check if this is a local maximum above strong threshold
         if (correlations[i] > correlations[i - 1] &&
             correlations[i] >= correlations[i + 1] &&
-            correlations[i] > threshold) {
+            correlations[i] > 0.5) {
 
-            peakOffset = offset;
+            peakOffset = minOffset + i;
             peakValue = correlations[i];
             foundPeak = true;
-            break; // Take the FIRST good peak (fundamental frequency)
+            break; // Take the FIRST strong peak (fundamental frequency)
         }
     }
 
+    // Pass 2: If no strong peak found, find the strongest peak above minimum threshold
     if (!foundPeak) {
+        let bestPeakValue = 0.3; // Minimum correlation threshold
+
+        for (let i = 1; i < correlations.length - 1; i++) {
+            // Check if this is a local maximum
+            if (correlations[i] > correlations[i - 1] &&
+                correlations[i] >= correlations[i + 1] &&
+                correlations[i] > bestPeakValue) {
+
+                peakOffset = minOffset + i;
+                peakValue = correlations[i];
+                bestPeakValue = correlations[i];
+                foundPeak = true;
+                // Don't break - keep looking for even stronger peaks
+            }
+        }
+    }
+
+    if (!foundPeak || peakValue < 0.3) {
         return -1;
     }
 
