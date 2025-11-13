@@ -70,7 +70,7 @@ class Metronome {
         envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
 
         // Master gain boost for overall louder output
-        masterGain.gain.value = 0.8;
+        masterGain.gain.value = 0.95;
 
         osc.connect(envelope);
         envelope.connect(masterGain);
