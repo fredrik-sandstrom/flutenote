@@ -562,11 +562,11 @@ function abcNoteToMidi(noteLetter, octaveMarker, accidental, keySignature) {
     // c, d, e, f, g, a, b = one octave up (C5-B5) = MIDI 72-83
     // C,, = C2 (MIDI 36), C, = C3 (MIDI 48), C = C4 (MIDI 60), c = C5 (MIDI 72), c' = C6 (MIDI 84)
 
-    let octave = 5; // Default for uppercase letters is C4 which is octave 4 in scientific pitch, but C=60 in MIDI
+    let octave = 6; // Default for uppercase letters (C4 = MIDI 60 = (6-1)*12 = 60)
 
     if (noteLetter === noteLetter.toLowerCase()) {
         // Lowercase = one octave higher
-        octave = 6;
+        octave = 7;
     }
 
     // Apply octave markers
