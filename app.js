@@ -55,6 +55,7 @@ let startTime = null;
 let songNotes = []; // Array of {note, startTime, endTime, yPosition, midi}
 let songPlaying = false;
 let songStartTime = null;
+let songOriginalTempo = 120; // Store original song tempo for speed control
 
 // Tuner event handlers
 startTunerBtn.addEventListener('click', async () => {
@@ -273,7 +274,9 @@ function animate() {
 
     // Draw song notes (beneath player notes)
     if (songPlaying && songNotes.length > 0) {
-        const songElapsed = elapsedSeconds - songStartTime;
+        // Apply tempo scaling based on current metronome tempo
+        const tempoScale = parseInt(tempoSlider.value) / songOriginalTempo;
+        const songElapsed = (elapsedSeconds - songStartTime) * tempoScale;
 
         for (const songNote of songNotes) {
             const barStartX = nowX + (songNote.startTime - songElapsed) * PIXELS_PER_SECOND;
@@ -495,7 +498,7 @@ function parseABCNotation(abcString) {
 
     // Parse the tune body
     const notes = parseABCTuneBody(tuneBody, defaultLength, tempo, keySignature);
-    return notes;
+    return { notes, tempo };
 }
 
 function parseABCTuneBody(body, defaultLength, tempo, keySignature) {
@@ -638,10 +641,18 @@ function playSong() {
 
     // Try to parse as ABC notation first (check for ABC headers or just ABC-style notes)
     if (notation.includes('K:') || notation.includes('L:') || notation.match(/[A-Ga-g][,']?[0-9/]?\s/)) {
-        songNotes = parseABCNotation(notation);
+        const result = parseABCNotation(notation);
+        songNotes = result.notes;
+        songOriginalTempo = result.tempo;
+
+        // Set metronome to song tempo
+        metronome.setTempo(result.tempo);
+        tempoSlider.value = result.tempo;
+        tempoDisplay.textContent = result.tempo;
     } else {
         // Fall back to simple notation
         songNotes = parseSongNotation(notation);
+        songOriginalTempo = 120; // Default tempo for simple notation
     }
 
     if (songNotes.length === 0) {
@@ -650,7 +661,13 @@ function playSong() {
     }
 
     songPlaying = true;
-    songStartTime = (performance.now() - startTime) / 1000;
+
+    // Calculate start time so first note appears at far right edge
+    // nowX is at 50% of canvas width, we want notes to start at 100% (right edge)
+    // Time needed to scroll from right edge to nowX = (canvasWidth * 0.5) / PIXELS_PER_SECOND
+    const currentElapsed = (performance.now() - startTime) / 1000;
+    const scrollTime = (pianoRollCanvas.width * 0.5) / PIXELS_PER_SECOND;
+    songStartTime = currentElapsed - scrollTime;
 
     playSongBtn.style.display = 'none';
     stopSongBtn.style.display = 'inline-block';
