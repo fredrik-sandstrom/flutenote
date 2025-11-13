@@ -260,7 +260,7 @@ function animate() {
     ctx.lineTo(nowX, pianoRollCanvas.height);
     ctx.stroke();
 
-    // Draw note bars
+    // Draw completed note bars
     for (let i = noteBars.length - 1; i >= 0; i--) {
         const bar = noteBars[i];
         const barStartX = nowX + (bar.startTime - elapsedSeconds) * PIXELS_PER_SECOND;
@@ -292,6 +292,42 @@ function animate() {
                 Math.min(barWidth, pianoRollCanvas.width - barStartX),
                 NOTE_HEIGHT - 2
             );
+        }
+    }
+
+    // Draw currently playing note (in real-time)
+    if (currentNote && noteStartTime !== null && currentNote.midi) {
+        const midi = currentNote.midi;
+        if (midi >= MIN_MIDI && midi <= MAX_MIDI) {
+            const barStartX = nowX + (noteStartTime - elapsedSeconds) * PIXELS_PER_SECOND;
+            const barEndX = nowX; // Current note ends at the "now" line
+            const barWidth = barEndX - barStartX;
+
+            if (barWidth > 0 && barStartX < pianoRollCanvas.width) {
+                const yPos = getYPosition(midi);
+                const color = getAccuracyColor(currentNote.cents);
+
+                // Draw with slight transparency to show it's in progress
+                ctx.globalAlpha = 0.8;
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                    Math.max(0, barStartX),
+                    yPos,
+                    Math.min(barWidth, pianoRollCanvas.width - barStartX),
+                    NOTE_HEIGHT - 2
+                );
+
+                // Draw border
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(
+                    Math.max(0, barStartX),
+                    yPos,
+                    Math.min(barWidth, pianoRollCanvas.width - barStartX),
+                    NOTE_HEIGHT - 2
+                );
+                ctx.globalAlpha = 1.0;
+            }
         }
     }
 
