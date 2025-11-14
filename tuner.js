@@ -22,8 +22,9 @@ class Tuner {
             // Create audio context
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-            // Initialize Pitchy PitchDetector (v3 UMD exposes Pitchy globally)
-            this.pitchDetector = Pitchy.PitchDetector.forFloat32Array(this.bufferLength);
+            // Initialize Pitchy PitchDetector (v3 UMD exports as default)
+            const PitchDetector = Pitchy.default || Pitchy.PitchDetector || Pitchy;
+            this.pitchDetector = PitchDetector.forFloat32Array(this.bufferLength);
 
             // Create analyser node
             this.analyser = this.audioContext.createAnalyser();

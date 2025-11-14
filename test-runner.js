@@ -8,7 +8,8 @@ const testTuner = new Tuner();
 
 // Create Pitchy detector for testing
 const testBufferSize = 2048;
-const pitchDetector = Pitchy.PitchDetector.forFloat32Array(testBufferSize);
+const PitchDetector = Pitchy.default || Pitchy.PitchDetector || Pitchy;
+const pitchDetector = PitchDetector.forFloat32Array(testBufferSize);
 
 function noteToFrequency(noteName, octave) {
     // Convert note name and octave to frequency
