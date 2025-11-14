@@ -935,7 +935,7 @@ function drawSheetMusic() {
         // Draw bar lines at the END of each measure (start from measure 1, not 0)
         // Bar line appears after the last beat of the measure
         // Offset slightly to the left so it doesn't overlap with notes
-        const barLineOffset = 0.05; // Small time offset in seconds to shift bar line left
+        const barLineOffset = 0.5; // Small time offset in seconds to shift bar line left
         for (let m = startMeasure + 1; m <= endMeasure; m++) {
             const barTime = m * measureDuration - barLineOffset;
             const barX = nowX + (barTime - songPlaybackPosition) * SHEET_PIXELS_PER_SECOND;
