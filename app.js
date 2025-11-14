@@ -908,6 +908,36 @@ function drawSheetMusic() {
     // Draw staff lines
     drawStaffLines(sheetCtx, staffTopLineY, width);
 
+    // Draw bar lines (vertical lines separating measures)
+    if (songNotes.length > 0) {
+        const tempo = parseInt(tempoSlider.value);
+        const beatsPerMeasureValue = parseInt(beatsPerMeasure.value);
+        const secondsPerBeat = 60.0 / tempo;
+        const measureDuration = beatsPerMeasureValue * secondsPerBeat;
+
+        // Calculate which measures are visible
+        const nowX = width * 0.5;
+        const visibleStartTime = songPlaybackPosition - (nowX / SHEET_PIXELS_PER_SECOND);
+        const visibleEndTime = songPlaybackPosition + ((width - nowX) / SHEET_PIXELS_PER_SECOND);
+
+        const startMeasure = Math.floor(visibleStartTime / measureDuration);
+        const endMeasure = Math.ceil(visibleEndTime / measureDuration);
+
+        sheetCtx.strokeStyle = '#999';
+        sheetCtx.lineWidth = 1;
+        for (let m = startMeasure; m <= endMeasure; m++) {
+            const barTime = m * measureDuration;
+            const barX = nowX + (barTime - songPlaybackPosition) * SHEET_PIXELS_PER_SECOND;
+
+            if (barX > 0 && barX < width) {
+                sheetCtx.beginPath();
+                sheetCtx.moveTo(barX, staffTopLineY);
+                sheetCtx.lineTo(barX, staffTopLineY + (4 * STAFF_LINE_SPACING));
+                sheetCtx.stroke();
+            }
+        }
+    }
+
     // Draw playback line (blue bar - VERTICAL at center)
     const nowX = width * 0.5; // 50% from left (center)
     sheetCtx.strokeStyle = '#667eea';
