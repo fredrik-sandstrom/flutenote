@@ -146,12 +146,19 @@ startMetronomeBtn.addEventListener('click', () => {
     let startPhase = 0;
     if (songPlaying) {
         const tempo = parseInt(tempoSlider.value);
+        const beatsPerMeasureValue = parseInt(beatsPerMeasure.value);
         const secondsPerBeat = 60.0 / tempo;
+        const measureDuration = beatsPerMeasureValue * secondsPerBeat;
 
-        // Calculate current beat phase from song position
-        // Handle negative positions properly with modulo
-        const phase = ((songPlaybackPosition % secondsPerBeat) + secondsPerBeat) % secondsPerBeat;
-        startPhase = phase / secondsPerBeat;
+        // Calculate current position within the measure (not just within a beat)
+        // This ensures metronome syncs to measure start (downbeat)
+        const positionInMeasure = ((songPlaybackPosition % measureDuration) + measureDuration) % measureDuration;
+
+        // Convert measure position to beat phase (0.0 to beatsPerMeasure)
+        const beatPhaseInMeasure = positionInMeasure / secondsPerBeat;
+
+        // Normalize to 0.0-1.0 range for the current beat, but track which beat we're on
+        startPhase = beatPhaseInMeasure / beatsPerMeasureValue;
     }
 
     metronome.start(startPhase);
@@ -925,7 +932,9 @@ function drawSheetMusic() {
 
         sheetCtx.strokeStyle = '#999';
         sheetCtx.lineWidth = 1;
-        for (let m = startMeasure; m <= endMeasure; m++) {
+        // Draw bar lines at the END of each measure (start from measure 1, not 0)
+        // Bar line appears after the last beat of the measure
+        for (let m = startMeasure + 1; m <= endMeasure; m++) {
             const barTime = m * measureDuration;
             const barX = nowX + (barTime - songPlaybackPosition) * SHEET_PIXELS_PER_SECOND;
 
