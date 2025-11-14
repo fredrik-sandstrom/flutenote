@@ -908,32 +908,31 @@ function drawSheetMusic() {
     // Draw staff lines
     drawStaffLines(sheetCtx, staffTopLineY, width);
 
-    // Draw playback line (blue bar at 50% height)
-    const nowY = staffCenterY;
+    // Draw playback line (blue bar - VERTICAL at center)
+    const nowX = width * 0.5; // 50% from left (center)
     sheetCtx.strokeStyle = '#667eea';
     sheetCtx.lineWidth = 3;
     sheetCtx.beginPath();
-    sheetCtx.moveTo(0, nowY);
-    sheetCtx.lineTo(width, nowY);
+    sheetCtx.moveTo(nowX, 0);
+    sheetCtx.lineTo(nowX, height);
     sheetCtx.stroke();
 
     // Draw song notes if playing
     if (songNotes.length > 0) {
         for (const songNote of songNotes) {
-            // Calculate Y position based on time offset from playback position
-            // Notes scroll from bottom to top
+            // Calculate X position based on time offset from playback position
+            // Notes scroll from right to left
             const timeOffset = songNote.startTime - songPlaybackPosition;
-            const noteY = nowY - (timeOffset * SHEET_PIXELS_PER_SECOND);
+            const noteX = nowX + (timeOffset * SHEET_PIXELS_PER_SECOND);
 
             // Only draw notes that are visible
-            if (noteY > -20 && noteY < height + 20) {
-                // Calculate staff position for this MIDI note
+            if (noteX > -30 && noteX < width + 30) {
+                // Calculate staff position for this MIDI note (Y position based on pitch)
                 const staffPos = getMidiStaffPosition(songNote.midi);
                 const noteStaffY = staffCenterY + (staffPos * STAFF_LINE_SPACING);
 
                 // Determine if note has passed the blue line
-                const hasPassed = noteY > nowY;
-                const noteX = width / 2; // Center horizontally
+                const hasPassed = noteX < nowX;
 
                 // Draw ledger lines for notes outside the staff
                 // Staff lines are at positions: -2, -1, 0, 1, 2 (where 0 is middle line)
