@@ -6,10 +6,18 @@ const noteStrings = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#',
 // Create a tuner instance to use its frequencyToNote method
 const testTuner = new Tuner();
 
-// Create Pitchy detector for testing
+// Create Pitchy detector for testing (will be initialized when Pitchy loads)
 const testBufferSize = 2048;
-const PitchDetector = Pitchy.default || Pitchy.PitchDetector || Pitchy;
-const pitchDetector = PitchDetector.forFloat32Array(testBufferSize);
+let pitchDetector = null;
+
+// Wait for Pitchy to load
+if (window.PitchDetector) {
+    pitchDetector = window.PitchDetector.forFloat32Array(testBufferSize);
+} else {
+    window.addEventListener('pitchyReady', () => {
+        pitchDetector = window.PitchDetector.forFloat32Array(testBufferSize);
+    });
+}
 
 function noteToFrequency(noteName, octave) {
     // Convert note name and octave to frequency
@@ -38,6 +46,19 @@ function generateTone(frequency, durationSeconds = 0.5, sampleRate = 48000) {
 function testNote(noteName, octave) {
     const expectedFrequency = noteToFrequency(noteName, octave);
     const expectedNote = `${noteName}${octave}`;
+
+    // Check if Pitchy is loaded
+    if (!pitchDetector) {
+        return {
+            expectedNote,
+            expectedFrequency: expectedFrequency.toFixed(2),
+            detectedNote: 'N/A',
+            detectedFrequency: 'N/A',
+            centsOff: 'N/A',
+            result: 'error',
+            resultText: 'Pitchy not loaded yet'
+        };
+    }
 
     // Generate synthetic tone
     const sampleRate = 48000;

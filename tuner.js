@@ -16,15 +16,25 @@ class Tuner {
 
     async start() {
         try {
+            // Wait for Pitchy to be loaded
+            if (!window.PitchDetector) {
+                await new Promise((resolve) => {
+                    if (window.pitchyLoaded) {
+                        resolve();
+                    } else {
+                        window.addEventListener('pitchyReady', resolve, { once: true });
+                    }
+                });
+            }
+
             // Request microphone access
             this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
             // Create audio context
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-            // Initialize Pitchy PitchDetector (v3 UMD exports as default)
-            const PitchDetector = Pitchy.default || Pitchy.PitchDetector || Pitchy;
-            this.pitchDetector = PitchDetector.forFloat32Array(this.bufferLength);
+            // Initialize Pitchy PitchDetector
+            this.pitchDetector = window.PitchDetector.forFloat32Array(this.bufferLength);
 
             // Create analyser node
             this.analyser = this.audioContext.createAnalyser();
