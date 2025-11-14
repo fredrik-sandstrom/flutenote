@@ -1,10 +1,14 @@
 // Test runner for pitch detection accuracy
-// Uses the actual Tuner class to test the real implementation
+// Uses Pitchy library directly for testing
 
 const noteStrings = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-// Create a tuner instance to use its methods
+// Create a tuner instance to use its frequencyToNote method
 const testTuner = new Tuner();
+
+// Create Pitchy detector for testing
+const testBufferSize = 2048;
+const pitchDetector = Pitchy.PitchDetector.forFloat32Array(testBufferSize);
 
 function noteToFrequency(noteName, octave) {
     // Convert note name and octave to frequency
@@ -29,7 +33,7 @@ function generateTone(frequency, durationSeconds = 0.5, sampleRate = 48000) {
     return buffer;
 }
 
-// Test a single note using the actual Tuner implementation
+// Test a single note using Pitchy library
 function testNote(noteName, octave) {
     const expectedFrequency = noteToFrequency(noteName, octave);
     const expectedNote = `${noteName}${octave}`;
@@ -38,14 +42,11 @@ function testNote(noteName, octave) {
     const sampleRate = 48000;
     const buffer = generateTone(expectedFrequency, 0.5, sampleRate);
 
-    // Run pitch detection on a slice of the buffer using the REAL Tuner implementation
-    const testBufferSize = 2048;
+    // Run pitch detection using Pitchy
     const testBuffer = buffer.slice(0, testBufferSize);
+    const [detectedFrequency, clarity] = pitchDetector.findPitch(testBuffer, sampleRate);
 
-    // Use the actual autoCorrelate method from the Tuner class
-    const detectedFrequency = testTuner.autoCorrelate(testBuffer, sampleRate);
-
-    if (detectedFrequency === -1 || !detectedFrequency) {
+    if (!detectedFrequency || clarity < 0.5) {
         return {
             expectedNote,
             expectedFrequency: expectedFrequency.toFixed(2),
@@ -53,7 +54,7 @@ function testNote(noteName, octave) {
             detectedFrequency: 'N/A',
             centsOff: 'N/A',
             result: 'error',
-            resultText: 'Detection Failed'
+            resultText: `Detection Failed (clarity: ${clarity ? clarity.toFixed(2) : 'N/A'})`
         };
     }
 
@@ -151,7 +152,7 @@ async function runTests(quick = false) {
         progressFill.style.width = `${progressPercent}%`;
         progressFill.textContent = `Testing ${note}${octave} (${i + 1}/${testCases.length})`;
 
-        // Run test using the REAL Tuner implementation
+        // Run test using Pitchy library
         const result = testNote(note, octave);
 
         // Update counts
