@@ -80,110 +80,86 @@ class Tuner {
     }
 
     autoCorrelate(buffer, sampleRate) {
-        // Implements the autocorrelation algorithm for pitch detection
-        let size = buffer.length;
-        let maxSamples = Math.floor(size / 2);
-        let rms = 0;
+        // YIN algorithm for pitch detection (more accurate than simple autocorrelation)
+        // Reference: https://github.com/ianprime0509/pitchy
+        const threshold = 0.1;
+        const probabilityThreshold = 0.1;
+        const bufferSize = buffer.length;
 
-        // Calculate RMS (root mean square) to detect if there's enough signal
-        for (let i = 0; i < size; i++) {
-            let val = buffer[i];
-            rms += val * val;
-        }
-        rms = Math.sqrt(rms / size);
+        // Step 1: Calculate the difference function
+        const yinBuffer = new Float32Array(bufferSize / 2);
+        yinBuffer[0] = 1.0;
 
-        // Not enough signal
-        if (rms < 0.01) return -1;
-
-        // Calculate zero-lag autocorrelation (for normalization)
-        let r0 = 0;
-        for (let i = 0; i < maxSamples; i++) {
-            r0 += buffer[i] * buffer[i];
-        }
-
-        // Find the first peak in the autocorrelation function
-        // Start from a minimum offset to avoid detecting impossibly high frequencies
-        let minOffset = Math.floor(sampleRate / 4000); // ~4000 Hz max
-        let maxOffset = Math.floor(sampleRate / 80);   // ~80 Hz min (below lowest flute note)
-
-        // Store correlation values
-        let correlations = new Float32Array(maxOffset - minOffset + 1);
-
-        for (let offset = minOffset; offset <= maxOffset; offset++) {
-            let correlation = 0;
-
-            // Calculate autocorrelation at this offset
-            for (let i = 0; i < maxSamples; i++) {
-                correlation += buffer[i] * buffer[i + offset];
+        let runningSum = 0;
+        for (let tau = 1; tau < yinBuffer.length; tau++) {
+            let sum = 0;
+            for (let i = 0; i < yinBuffer.length; i++) {
+                const delta = buffer[i] - buffer[i + tau];
+                sum += delta * delta;
             }
-
-            // Normalize by zero-lag autocorrelation
-            correlations[offset - minOffset] = correlation / r0;
+            yinBuffer[tau] = sum;
         }
 
-        // Find the first peak that crosses our threshold
-        // Two-pass approach: prefer high-confidence peaks, fallback to strongest peak
-        let foundPeak = false;
-        let peakOffset = -1;
-        let peakValue = -1;
-
-        // Pass 1: Look for first strong peak (>50% correlation)
-        for (let i = 1; i < correlations.length - 1; i++) {
-            // Check if this is a local maximum above strong threshold
-            if (correlations[i] > correlations[i - 1] &&
-                correlations[i] >= correlations[i + 1] &&
-                correlations[i] > 0.5) {
-
-                peakOffset = minOffset + i;
-                peakValue = correlations[i];
-                foundPeak = true;
-                break; // Take the FIRST strong peak (fundamental frequency)
+        // Step 2: Calculate the cumulative mean normalized difference function
+        for (let tau = 1; tau < yinBuffer.length; tau++) {
+            runningSum += yinBuffer[tau];
+            if (runningSum === 0) {
+                yinBuffer[tau] = 1;
+            } else {
+                yinBuffer[tau] *= tau / runningSum;
             }
         }
 
-        // Pass 2: If no strong peak found, find the strongest peak above minimum threshold
-        if (!foundPeak) {
-            let bestPeakValue = 0.3; // Minimum correlation threshold
+        // Step 3: Find the first tau where the CMNDF drops below threshold
+        let tauEstimate = -1;
+        let minTau = Math.floor(sampleRate / 1000); // Min 1000 Hz
+        let maxTau = Math.floor(sampleRate / 80);   // Max 80 Hz
 
-            for (let i = 1; i < correlations.length - 1; i++) {
-                // Check if this is a local maximum
-                if (correlations[i] > correlations[i - 1] &&
-                    correlations[i] >= correlations[i + 1] &&
-                    correlations[i] > bestPeakValue) {
+        for (let tau = minTau; tau < maxTau; tau++) {
+            if (yinBuffer[tau] < threshold) {
+                // Find local minimum
+                while (tau + 1 < maxTau && yinBuffer[tau + 1] < yinBuffer[tau]) {
+                    tau++;
+                }
+                tauEstimate = tau;
+                break;
+            }
+        }
 
-                    peakOffset = minOffset + i;
-                    peakValue = correlations[i];
-                    bestPeakValue = correlations[i];
-                    foundPeak = true;
-                    // Don't break - keep looking for even stronger peaks
+        // If no good estimate found, find the global minimum
+        if (tauEstimate === -1) {
+            let minVal = 1.0;
+            for (let tau = minTau; tau < maxTau; tau++) {
+                if (yinBuffer[tau] < minVal) {
+                    minVal = yinBuffer[tau];
+                    tauEstimate = tau;
                 }
             }
+
+            // If minimum is still too high, no pitch detected
+            if (minVal > probabilityThreshold) {
+                return -1;
+            }
         }
 
-        if (!foundPeak || peakValue < 0.3) {
-            return -1;
-        }
+        // Step 4: Parabolic interpolation for better accuracy
+        let betterTau = tauEstimate;
+        if (tauEstimate > 0 && tauEstimate < yinBuffer.length - 1) {
+            const x0 = tauEstimate - 1;
+            const x2 = tauEstimate + 1;
+            const y0 = yinBuffer[x0];
+            const y1 = yinBuffer[tauEstimate];
+            const y2 = yinBuffer[x2];
 
-        // Refine the peak using parabolic interpolation for sub-sample accuracy
-        let shift = 0;
-        if (peakOffset > minOffset && peakOffset < maxOffset) {
-            let y1 = correlations[peakOffset - minOffset - 1];
-            let y2 = correlations[peakOffset - minOffset];
-            let y3 = correlations[peakOffset - minOffset + 1];
-
-            // Parabolic interpolation formula
-            let denominator = 2 * (2 * y2 - y1 - y3);
+            const denominator = 2 * (2 * y1 - y0 - y2);
             if (denominator !== 0) {
-                shift = (y1 - y3) / denominator;
-
-                // Clamp shift to reasonable range
-                if (!isFinite(shift) || Math.abs(shift) > 1) {
-                    shift = 0;
-                }
+                const delta = (y0 - y2) / denominator;
+                betterTau = tauEstimate + delta;
             }
         }
 
-        return sampleRate / (peakOffset + shift);
+        // Convert tau to frequency
+        return sampleRate / betterTau;
     }
 
     frequencyToNote(frequency) {
